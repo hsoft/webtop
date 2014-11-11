@@ -2,7 +2,7 @@
 
 extern crate ncurses;
 
-use std::io::{File, BufferedReader};
+use std::io::File;
 use std::io::fs::PathExtensions;
 use ncurses::*;
 
@@ -30,16 +30,19 @@ fn main()
     let maxlines = scry - 2;
 
     while input == -1 {
-        let fp = File::open(&filepath).ok().expect("");
-        let mut reader = BufferedReader::new(fp);
-        for (index, line) in reader.lines().enumerate() {
-            mvprintw(index as i32, 0, line.ok().expect("").as_slice());
+        let mut fp = File::open(&filepath).ok().expect("");
+        let _ = fp.seek(-20000, ::std::io::SeekEnd);
+        let raw_contents = fp.read_to_end().unwrap();
+        let contents = ::std::str::from_utf8(raw_contents.as_slice()).unwrap();
+        let lines = contents.split('\n').rev();
+        for (index, line) in lines.enumerate() {
+            mvprintw(index as i32, 0, line);
             if index == maxlines-1 {
                 break;
             }
         }
         let msg = format!(
-            "This program reads the first {} lines of {} and updates automatically",
+            "This program reads the last {} lines of {} and updates automatically",
             maxlines, filepath.display()
         );
         mvprintw((maxlines+1) as i32, 0, msg.as_slice());

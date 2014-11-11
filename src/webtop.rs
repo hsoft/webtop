@@ -18,7 +18,6 @@ fn main()
         println!("{} doesn't exist! aborting.", filepath.display());
         return;
     }
-    let maxlines = 3;
     let mut timer = ::std::io::Timer::new().unwrap();
     let mut input : i32 = -1;
     initscr();
@@ -26,6 +25,9 @@ fn main()
     keypad(stdscr, true);
     nodelay(stdscr, true);
     noecho();
+
+    let scry = getmaxy(stdscr) as uint;
+    let maxlines = scry - 2;
 
     while input == -1 {
         let fp = File::open(&filepath).ok().expect("");

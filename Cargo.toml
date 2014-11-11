@@ -1,0 +1,15 @@
+[package]
+
+name = "webtop"
+version = "0.0.1"
+authors = [ "Virgil Dupras <hsoft@hardcoded.net>" ]
+
+[[bin]]
+
+name = "webtop"
+
+[dependencies.ncurses]
+
+rev = "a2bb6bc7a63e21da1f45be0b6f63e7eef902be7f"
+git = "https://github.com/jeaye/ncurses-rs.git"
+

@@ -2,14 +2,17 @@
 
 extern crate ncurses;
 extern crate regex;
+extern crate time;
 
 use std::io::File;
 use std::io::fs::PathExtensions;
+use time::{Tm, strptime, strftime, now};
 use regex::Regex;
 use ncurses::*;
 
 struct Hit<'r> {
     host: &'r str,
+    time: Tm,
     status: uint,
     path: &'r str,
     referer: &'r str,
@@ -17,7 +20,7 @@ struct Hit<'r> {
 }
 
 fn parse_line(line: &str) -> Option<Box<Hit>> {
-    let re = Regex::new(r#"(\d+\.\d+\.\d+\.\d+) - - \[.+\] "\w+ ([^ ]+) [^ "]+" (\d+) \d+ "([^"]*)" "([^"]*)""#)
+    let re = Regex::new(r#"(\d+\.\d+\.\d+\.\d+) - - \[(.+) \+\d{4}\] "\w+ ([^ ]+) [^ "]+" (\d+) \d+ "([^"]*)" "([^"]*)""#)
         .ok().expect("");
     let cap = match re.captures(line) {
         Some(cap) => cap,
@@ -25,13 +28,17 @@ fn parse_line(line: &str) -> Option<Box<Hit>> {
     };
     Some(box Hit {
         host: cap.at(1),
-        status: match from_str(cap.at(3)) {
+        time: match strptime(cap.at(2), "%d/%b/%Y:%H:%M:%S") {
+            Ok(tm) => tm,
+            Err(_) => now()
+        },
+        status: match from_str(cap.at(4)) {
             Some(i) => i,
             None => 999
         },
-        path: cap.at(2),
-        referer: cap.at(4),
-        agent: cap.at(5),
+        path: cap.at(3),
+        referer: cap.at(5),
+        agent: cap.at(6),
     })
 }
 
@@ -69,9 +76,10 @@ fn main()
                 Some(hit_box) => hit_box,
                 None => continue
             };
+            let time_fmt = strftime("%Y-%m-%d %H:%M:%S", &hit_box.time);
             let hit_fmt = format!(
-                "{} | {} | {} | {} | {}",
-                hit_box.host, hit_box.status, hit_box.path, hit_box.referer, hit_box.agent
+                "{} | {} | {} | {} | {} | {}",
+                hit_box.host, time_fmt, hit_box.status, hit_box.path, hit_box.referer, hit_box.agent
             );
             mvprintw(index as i32, 0, hit_fmt.as_slice());
             if index == maxlines-1 {

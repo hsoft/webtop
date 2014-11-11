@@ -3,11 +3,21 @@
 extern crate ncurses;
 
 use std::io::{File, BufferedReader};
+use std::io::fs::PathExtensions;
 use ncurses::*;
 
 fn main()
 {
-    let filename = "test.txt";
+    let args = ::std::os::args();
+    if args.len() < 2 {
+        println!("You need to specify a file to watch.");
+        return;
+    }
+    let filepath = Path::new(args[1].as_slice());
+    if !filepath.exists() {
+        println!("{} doesn't exist! aborting.", filepath.display());
+        return;
+    }
     let maxlines = 3;
     let mut timer = ::std::io::Timer::new().unwrap();
     let mut input : i32 = -1;
@@ -18,7 +28,7 @@ fn main()
     noecho();
 
     while input == -1 {
-        let fp = File::open(&Path::new(filename)).ok().expect("");
+        let fp = File::open(&filepath).ok().expect("");
         let mut reader = BufferedReader::new(fp);
         for (index, line) in reader.lines().enumerate() {
             mvprintw(index as i32, 0, line.ok().expect("").as_slice());
@@ -28,7 +38,7 @@ fn main()
         }
         let msg = format!(
             "This program reads the first {} lines of {} and updates automatically",
-            maxlines, filename
+            maxlines, filepath.display()
         );
         mvprintw((maxlines+1) as i32, 0, msg.as_slice());
         refresh();

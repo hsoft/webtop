@@ -27,6 +27,19 @@ struct HitCounter {
     count: uint,
 }
 
+fn cmp_time(a: &Tm, b: &Tm) -> Ordering {
+    let va = vec![a.tm_year, a.tm_yday, a.tm_hour, a.tm_min, a.tm_sec, a.tm_nsec];
+    let vb = vec![b.tm_year, b.tm_yday, b.tm_hour, b.tm_min, b.tm_sec, b.tm_nsec];
+    for (ia, ib) in va.iter().zip(vb.iter()) {
+        match ia.cmp(ib) {
+            Equal => continue,
+            Less => return Less,
+            Greater => return Greater,
+        }
+    }
+    Equal
+}
+
 fn parse_line(line: &str) -> Option<Hit> {
     let re = Regex::new(r#"(\d+\.\d+\.\d+\.\d+) - - \[(.+) \+\d{4}\] "\w+ ([^ ]+) [^ "]+" (\d+) \d+ "([^"]*)" "([^"]*)""#)
         .ok().expect("");
@@ -80,7 +93,12 @@ fn mainloop(filepath: &Path, maxlines: uint) {
             counters.insert(hit_box.host, counter);
         }
         let mut sorted_counters: Vec<&HitCounter> = counters.values().collect();
-        sorted_counters.sort_by(|a, b| (&b.count).cmp(&a.count));
+        sorted_counters.sort_by(
+            |a, b| match (&b.count).cmp(&a.count) {
+                Equal => cmp_time(&b.last_hit.time, &a.last_hit.time),
+                x => x,
+            }
+        );
         for (index, counter) in sorted_counters.iter().take(maxlines).enumerate() {
             let hit = counter.last_hit.clone();
             let time_fmt = strftime("%Y-%m-%d %H:%M:%S", &hit.time).unwrap();
@@ -100,6 +118,7 @@ fn mainloop(filepath: &Path, maxlines: uint) {
         input = getch();
     }
 }
+
 fn main()
 {
     let args = ::std::os::args();

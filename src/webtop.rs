@@ -68,7 +68,7 @@ fn mainloop(filepath: &Path, maxlines: uint) {
     let mut input : i32 = -1;
     while input == -1 {
         let mut fp = File::open(filepath).ok().expect("");
-        let _ = fp.seek(-20000, ::std::io::SeekEnd);
+        let _ = fp.seek(-50000, ::std::io::SeekEnd);
         let raw_contents = fp.read_to_end().unwrap();
         let contents = ::std::str::from_utf8(raw_contents.as_slice()).unwrap();
         let mut counters: HashMap<String, HitCounter> = HashMap::new();
@@ -99,11 +99,12 @@ fn mainloop(filepath: &Path, maxlines: uint) {
                 x => x,
             }
         );
+        erase();
         for (index, counter) in sorted_counters.iter().take(maxlines).enumerate() {
             let hit = counter.last_hit.clone();
             let time_fmt = strftime("%Y-%m-%d %H:%M:%S", &hit.time).unwrap();
             let hit_fmt = format!(
-                "{} | {} | {} | {} | {} | {}",
+                "{:>4} | {:<15} | {} | {} | {} | {}",
                 counter.count, hit.host, time_fmt, hit.status, hit.path, hit.referer
             );
             mvprintw(index as i32, 0, hit_fmt.as_slice());

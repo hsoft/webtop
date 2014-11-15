@@ -66,12 +66,31 @@ fn parse_line(line: &str) -> Option<Hit> {
 fn mainloop(filepath: &Path, maxlines: uint) {
     let mut timer = ::std::io::Timer::new().unwrap();
     let mut input : i32 = -1;
+    let mut last_size: i64 = 0;
+    let mut counters: HashMap<String, HitCounter> = HashMap::new();
     while input == -1 {
-        let mut fp = File::open(filepath).ok().expect("");
-        let _ = fp.seek(-50000, ::std::io::SeekEnd);
+        let fsize = filepath.stat().ok().expect("can't stat").size as i64;
+        if fsize < last_size {
+            let msg = "Something weird is happening with the target file, skipping this round.";
+            mvprintw((maxlines+1) as i32, 0, msg.as_slice());
+            continue;
+        }
+        let read_size: i64 = if last_size > 0 { fsize - last_size } else { 90000 };
+        last_size = fsize;
+        let mut fp = match File::open(filepath) {
+            Ok(fp) => fp,
+            Err(e) => {
+                let msg = format!(
+                    "Had troube reading {}! Error: {}",
+                    filepath.display(), e,
+                );
+                mvprintw((maxlines+1) as i32, 0, msg.as_slice());
+                continue;
+            },
+        };
+        let _ = fp.seek(-read_size, ::std::io::SeekEnd);
         let raw_contents = fp.read_to_end().unwrap();
         let contents = ::std::str::from_utf8(raw_contents.as_slice()).unwrap();
-        let mut counters: HashMap<String, HitCounter> = HashMap::new();
         for line in contents.split('\n').rev() {
             let hit_box = match parse_line(line) {
                 Some(hit) => box hit,
@@ -110,8 +129,8 @@ fn mainloop(filepath: &Path, maxlines: uint) {
             mvprintw(index as i32, 0, hit_fmt.as_slice());
         }
         let msg = format!(
-            "This program reads the last {} lines of {} and updates automatically",
-            maxlines, filepath.display()
+            "Reading {}. Last read: {} bytes.",
+            filepath.display(), read_size,
         );
         mvprintw((maxlines+1) as i32, 0, msg.as_slice());
         refresh();

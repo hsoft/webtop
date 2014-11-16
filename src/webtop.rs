@@ -25,6 +25,8 @@ struct Hit {
     agent: String,
 }
 
+type HitCounter = HashMap<String, Vec<Box<Hit>>>;
+
 enum ProgramMode {
     Host,
     URLPath,
@@ -66,11 +68,24 @@ fn parse_line(line: &str) -> Option<Hit> {
     })
 }
 
+fn count_hit(hit_counter: &mut HitCounter, hit_box: Box<Hit>, key: String) {
+    let _ = match hit_counter.entry(key.clone()) {
+        Vacant(_) => {}
+        Occupied(e) => {
+            let mut counter: &mut Vec<Box<Hit>> = e.into_mut();
+            counter.push(hit_box);
+            return;
+        },
+    };
+    let counter = vec![hit_box];
+    hit_counter.insert(key, counter);
+}
+
 fn mainloop(filepath: &Path, maxlines: uint) -> i32 {
     let mut timer = ::std::io::Timer::new().unwrap();
     let mut last_size: i64 = 0;
-    let mut host_counters: HashMap<String, Vec<Box<Hit>>> = HashMap::new();
-    let mut path_counters: HashMap<String, Vec<Box<Hit>>> = HashMap::new();
+    let mut host_counters: HitCounter = HashMap::new();
+    let mut path_counters: HitCounter = HashMap::new();
     let mut mode = Host;
     loop {
         let fsize = filepath.stat().ok().expect("can't stat").size as i64;
@@ -100,26 +115,10 @@ fn mainloop(filepath: &Path, maxlines: uint) -> i32 {
                 Some(hit) => box hit,
                 None => continue
             };
-            let _ = match host_counters.entry(hit_box.clone().host.clone()) {
-                Vacant(_) => {}
-                Occupied(e) => {
-                    let mut counter: &mut Vec<Box<Hit>> = e.into_mut();
-                    counter.push(hit_box.clone());
-                    continue;
-                },
-            };
-            let counter = vec![hit_box.clone()];
-            host_counters.insert(hit_box.clone().host, counter);
-            let _ = match path_counters.entry(hit_box.clone().path.clone()) {
-                Vacant(_) => {}
-                Occupied(e) => {
-                    let mut counter: &mut Vec<Box<Hit>> = e.into_mut();
-                    counter.push(hit_box.clone());
-                    continue;
-                },
-            };
-            let counter = vec![hit_box.clone()];
-            path_counters.insert(hit_box.clone().path, counter);
+            let key = hit_box.clone().host;
+            count_hit(&mut host_counters, hit_box.clone(), key);
+            let key = hit_box.clone().path;
+            count_hit(&mut path_counters, hit_box.clone(), key);
         }
         let counters = match mode {
             Host => &host_counters,

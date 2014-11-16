@@ -16,6 +16,7 @@ use ncurses::*;
 const QUIT_KEY: i32 = 'q' as i32;
 const HOST_KEY: i32 = 'h' as i32;
 const PATH_KEY: i32 = 'p' as i32;
+const REFERER_KEY: i32 = 'r' as i32;
 
 #[deriving(Clone)]
 struct Hit {
@@ -32,6 +33,7 @@ type HitCounter = HashMap<String, Vec<Box<Hit>>>;
 enum ProgramMode {
     Host,
     URLPath,
+    Referer,
 }
 
 fn cmp_time(a: &Tm, b: &Tm) -> Ordering {
@@ -87,6 +89,7 @@ fn mainloop(filepath: &Path, maxlines: uint) -> i32 {
     let mut last_size: i64 = 0;
     let mut host_counters: HitCounter = HashMap::new();
     let mut path_counters: HitCounter = HashMap::new();
+    let mut referer_counters: HitCounter = HashMap::new();
     let mut mode = Host;
     loop {
         let fsize = filepath.stat().ok().expect("can't stat").size as i64;
@@ -118,10 +121,12 @@ fn mainloop(filepath: &Path, maxlines: uint) -> i32 {
             };
             count_hit(&mut host_counters, &hit, &hit.host);
             count_hit(&mut path_counters, &hit, &hit.path);
+            count_hit(&mut referer_counters, &hit, &hit.referer);
         }
         let counters = match mode {
             Host => &host_counters,
             URLPath => &path_counters,
+            Referer => &referer_counters,
         };
         let mut sorted_counters: Vec<&Vec<Box<Hit>>> = counters.values().collect();
         sorted_counters.sort_by(
@@ -143,9 +148,10 @@ fn mainloop(filepath: &Path, maxlines: uint) -> i32 {
         let mode_str = match mode {
             Host => "Host",
             URLPath => "Path",
+            Referer => "Referer",
         };
         let msg = format!(
-            "Last read: {} bytes. {} mode. Hit 'q' to quit, 'h' for host mode, 'p' for path mode.",
+            "Last read: {} bytes. {} mode. Hit 'q' to quit, 'h/p/r' for the different modes",
             read_size, mode_str
         );
         mvprintw((maxlines+1) as i32, 0, msg.as_slice());
@@ -156,6 +162,7 @@ fn mainloop(filepath: &Path, maxlines: uint) -> i32 {
             QUIT_KEY => return input,
             PATH_KEY => URLPath,
             HOST_KEY => Host,
+            REFERER_KEY => Referer,
             _ => mode,
         }
     }

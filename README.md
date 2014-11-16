@@ -24,10 +24,15 @@ The program only reads the end of the target file. It works by repeatedly `stat`
 file and read the size difference from the last stat.
 
 The program will then present you with a curses based interface showing you HTTP hits, grouped
-by Host, ordered by hit count. You can press `p` to go in Path mode, which groups by URL path
-instead of grouping by Host.
+by Host, ordered by hit count. There's also the Path mode and the Referer mode which group hits
+differently.
 
-Press `q` to quit.
+## Keybindings
+
+* `q` - quit
+* `h` - Host mode
+* `p` - Path mode
+* `r` - Referer mode
 
 [ncurses-rs]: https://github.com/jeaye/ncurses-rs
 

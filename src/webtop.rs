@@ -11,6 +11,10 @@ use time::{Tm, strptime, strftime, now};
 use regex::Regex;
 use ncurses::*;
 
+const QUIT_KEY: i32 = 'q' as i32;
+const HOST_KEY: i32 = 'h' as i32;
+const PATH_KEY: i32 = 'p' as i32;
+
 #[deriving(Clone)]
 struct Hit {
     host: String,
@@ -19,6 +23,11 @@ struct Hit {
     path: String,
     referer: String,
     agent: String,
+}
+
+enum ProgramMode {
+    Host,
+    URLPath,
 }
 
 fn cmp_time(a: &Tm, b: &Tm) -> Ordering {
@@ -57,12 +66,12 @@ fn parse_line(line: &str) -> Option<Hit> {
     })
 }
 
-fn mainloop(filepath: &Path, maxlines: uint) {
+fn mainloop(filepath: &Path, maxlines: uint) -> i32 {
     let mut timer = ::std::io::Timer::new().unwrap();
-    let mut input : i32 = -1;
     let mut last_size: i64 = 0;
     let mut counters: HashMap<String, Vec<Box<Hit>>> = HashMap::new();
-    while input == -1 {
+    let mut mode = Host;
+    loop {
         let fsize = filepath.stat().ok().expect("can't stat").size as i64;
         if fsize < last_size {
             let msg = "Something weird is happening with the target file, skipping this round.";
@@ -118,14 +127,24 @@ fn mainloop(filepath: &Path, maxlines: uint) {
             );
             mvprintw(index as i32, 0, hit_fmt.as_slice());
         }
+        let mode_str = match mode {
+            Host => "Host",
+            URLPath => "Path",
+        };
         let msg = format!(
-            "Reading {}. Last read: {} bytes.",
-            filepath.display(), read_size,
+            "Last read: {} bytes. {} mode. Hit 'q' to quit, 'h' for host mode, 'p' for path mode.",
+            read_size, mode_str
         );
         mvprintw((maxlines+1) as i32, 0, msg.as_slice());
         refresh();
         timer.sleep(::std::time::Duration::milliseconds(1000));
-        input = getch();
+        let input = getch();
+        mode = match input {
+            QUIT_KEY => return input,
+            PATH_KEY => URLPath,
+            HOST_KEY => Host,
+            _ => mode,
+        }
     }
 }
 
@@ -150,8 +169,9 @@ fn main()
     let scry = getmaxy(stdscr) as uint;
     let maxlines = scry - 2;
 
-    mainloop(&filepath, maxlines);
+    let last_input = mainloop(&filepath, maxlines);
 
     endwin();
+    println!("Program ended with last input {}", last_input);
 }
 

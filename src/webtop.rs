@@ -111,13 +111,13 @@ fn mainloop(filepath: &Path, maxlines: uint) -> i32 {
         let raw_contents = fp.read_to_end().unwrap();
         let contents = ::std::str::from_utf8(raw_contents.as_slice()).unwrap();
         for line in contents.split('\n').rev() {
-            let hit_box = match parse_line(line) {
-                Some(hit) => box hit,
+            let hit_box = box match parse_line(line) {
+                Some(hit) => hit,
                 None => continue
             };
-            let key = hit_box.clone().host;
+            let key = (*hit_box).host.clone();
             count_hit(&mut host_counters, hit_box.clone(), key);
-            let key = hit_box.clone().path;
+            let key = (*hit_box).path.clone();
             count_hit(&mut path_counters, hit_box.clone(), key);
         }
         let counters = match mode {

@@ -69,7 +69,8 @@ fn parse_line(line: &str) -> Option<Hit> {
 fn mainloop(filepath: &Path, maxlines: uint) -> i32 {
     let mut timer = ::std::io::Timer::new().unwrap();
     let mut last_size: i64 = 0;
-    let mut counters: HashMap<String, Vec<Box<Hit>>> = HashMap::new();
+    let mut host_counters: HashMap<String, Vec<Box<Hit>>> = HashMap::new();
+    let mut path_counters: HashMap<String, Vec<Box<Hit>>> = HashMap::new();
     let mut mode = Host;
     loop {
         let fsize = filepath.stat().ok().expect("can't stat").size as i64;
@@ -99,7 +100,7 @@ fn mainloop(filepath: &Path, maxlines: uint) -> i32 {
                 Some(hit) => box hit,
                 None => continue
             };
-            let _ = match counters.entry(hit_box.clone().host.clone()) {
+            let _ = match host_counters.entry(hit_box.clone().host.clone()) {
                 Vacant(_) => {}
                 Occupied(e) => {
                     let mut counter: &mut Vec<Box<Hit>> = e.into_mut();
@@ -108,8 +109,22 @@ fn mainloop(filepath: &Path, maxlines: uint) -> i32 {
                 },
             };
             let counter = vec![hit_box.clone()];
-            counters.insert(hit_box.host, counter);
+            host_counters.insert(hit_box.clone().host, counter);
+            let _ = match path_counters.entry(hit_box.clone().path.clone()) {
+                Vacant(_) => {}
+                Occupied(e) => {
+                    let mut counter: &mut Vec<Box<Hit>> = e.into_mut();
+                    counter.push(hit_box.clone());
+                    continue;
+                },
+            };
+            let counter = vec![hit_box.clone()];
+            path_counters.insert(hit_box.clone().path, counter);
         }
+        let counters = match mode {
+            Host => &host_counters,
+            URLPath => &path_counters,
+        };
         let mut sorted_counters: Vec<&Vec<Box<Hit>>> = counters.values().collect();
         sorted_counters.sort_by(
             |a, b| match (&b.len()).cmp(&a.len()) {

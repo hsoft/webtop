@@ -5,7 +5,29 @@ for something, anything. I though "well, why not yet another apachetop?".
 
 It's built on curses using [ncurses-rs][ncurses-rs]
 
-For now, it's nothing interesting, really. Move along.
+# Compiling
+
+To compile this, you need to be on Rust 0.13 nightly. You calso need Cargo.
+
+Then, it's only a matter of:
+
+    $ cargo build
+
+The resulting `webtop` binary will end up in the `target/` subfolder.
+
+# Usage
+
+It has very limited functionality, but the basics are that you call `webtop` with the target
+log file you want to watch. Example: `./webtop www.access.log`.
+
+The program only reads the end of the target file. It works by repeatedly `stat`-ing the target
+file and read the size difference from the last stat.
+
+The program will then present you with a curses based interface showing you HTTP hits, grouped
+by Host, ordered by hit count. You can press `p` to go in Path mode, which groups by URL path
+instead of grouping by Host.
+
+Press `q` to quit.
 
 [ncurses-rs]: https://github.com/jeaye/ncurses-rs
 

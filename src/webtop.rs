@@ -1,14 +1,16 @@
 #![feature(globs)]
+#![feature(phase)]
+#[phase(plugin)]
 
-extern crate ncurses;
+extern crate regex_macros;
 extern crate regex;
 extern crate time;
+extern crate ncurses;
 
 use std::io::File;
 use std::io::fs::PathExtensions;
 use std::collections::hash_map::{HashMap, Occupied, Vacant};
 use time::{Tm, strptime, strftime, now};
-use regex::Regex;
 use ncurses::*;
 
 const QUIT_KEY: i32 = 'q' as i32;
@@ -46,8 +48,7 @@ fn cmp_time(a: &Tm, b: &Tm) -> Ordering {
 }
 
 fn parse_line(line: &str) -> Option<Hit> {
-    let re = Regex::new(r#"(\d+\.\d+\.\d+\.\d+) - - \[(.+) \+\d{4}\] "\w+ ([^ ]+) [^ "]+" (\d+) \d+ "([^"]*)" "([^"]*)""#)
-        .ok().expect("");
+    let re = regex!(r#"(\d+\.\d+\.\d+\.\d+) - - \[(.+) \+\d{4}\] "\w+ ([^ ]+) [^ "]+" (\d+) \d+ "([^"]*)" "([^"]*)""#);
     let cap = match re.captures(line) {
         Some(cap) => cap,
         None => return None

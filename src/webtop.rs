@@ -21,12 +21,6 @@ struct Hit {
     agent: String,
 }
 
-struct HitCounter {
-    host: String,
-    last_hit: Box<Hit>,
-    count: uint,
-}
-
 fn cmp_time(a: &Tm, b: &Tm) -> Ordering {
     let va = vec![a.tm_year, a.tm_yday, a.tm_hour, a.tm_min, a.tm_sec, a.tm_nsec];
     let vb = vec![b.tm_year, b.tm_yday, b.tm_hour, b.tm_min, b.tm_sec, b.tm_nsec];
@@ -67,7 +61,7 @@ fn mainloop(filepath: &Path, maxlines: uint) {
     let mut timer = ::std::io::Timer::new().unwrap();
     let mut input : i32 = -1;
     let mut last_size: i64 = 0;
-    let mut counters: HashMap<String, HitCounter> = HashMap::new();
+    let mut counters: HashMap<String, Vec<Box<Hit>>> = HashMap::new();
     while input == -1 {
         let fsize = filepath.stat().ok().expect("can't stat").size as i64;
         if fsize < last_size {
@@ -99,32 +93,28 @@ fn mainloop(filepath: &Path, maxlines: uint) {
             let _ = match counters.entry(hit_box.clone().host.clone()) {
                 Vacant(_) => {}
                 Occupied(e) => {
-                    let mut counter: &mut HitCounter = e.into_mut();
-                    counter.count += 1;
+                    let mut counter: &mut Vec<Box<Hit>> = e.into_mut();
+                    counter.push(hit_box.clone());
                     continue;
                 },
             };
-            let counter = HitCounter {
-                host: hit_box.host.clone(),
-                last_hit: hit_box.clone(),
-                count: 1,
-            };
+            let counter = vec![hit_box.clone()];
             counters.insert(hit_box.host, counter);
         }
-        let mut sorted_counters: Vec<&HitCounter> = counters.values().collect();
+        let mut sorted_counters: Vec<&Vec<Box<Hit>>> = counters.values().collect();
         sorted_counters.sort_by(
-            |a, b| match (&b.count).cmp(&a.count) {
-                Equal => cmp_time(&b.last_hit.time, &a.last_hit.time),
+            |a, b| match (&b.len()).cmp(&a.len()) {
+                Equal => cmp_time(&b[b.len()-1].time, &a[a.len()-1].time),
                 x => x,
             }
         );
         erase();
         for (index, counter) in sorted_counters.iter().take(maxlines).enumerate() {
-            let hit = counter.last_hit.clone();
+            let hit = counter[counter.len()-1].clone();
             let time_fmt = strftime("%Y-%m-%d %H:%M:%S", &hit.time).unwrap();
             let hit_fmt = format!(
                 "{:>4} | {:<15} | {} | {} | {} | {}",
-                counter.count, hit.host, time_fmt, hit.status, hit.path, hit.referer
+                counter.len(), hit.host, time_fmt, hit.status, hit.path, hit.referer
             );
             mvprintw(index as i32, 0, hit_fmt.as_slice());
         }

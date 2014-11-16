@@ -68,17 +68,17 @@ fn parse_line(line: &str) -> Option<Hit> {
     })
 }
 
-fn count_hit(hit_counter: &mut HitCounter, hit_box: Box<Hit>, key: String) {
+fn count_hit(hit_counter: &mut HitCounter, hit: &Hit, key: &String) {
     let _ = match hit_counter.entry(key.clone()) {
         Vacant(_) => {}
         Occupied(e) => {
             let mut counter: &mut Vec<Box<Hit>> = e.into_mut();
-            counter.push(hit_box);
+            counter.push(box hit.clone());
             return;
         },
     };
-    let counter = vec![hit_box];
-    hit_counter.insert(key, counter);
+    let counter = vec![box hit.clone()];
+    hit_counter.insert(key.clone(), counter);
 }
 
 fn mainloop(filepath: &Path, maxlines: uint) -> i32 {
@@ -111,14 +111,12 @@ fn mainloop(filepath: &Path, maxlines: uint) -> i32 {
         let raw_contents = fp.read_to_end().unwrap();
         let contents = ::std::str::from_utf8(raw_contents.as_slice()).unwrap();
         for line in contents.split('\n').rev() {
-            let hit_box = box match parse_line(line) {
+            let hit = match parse_line(line) {
                 Some(hit) => hit,
                 None => continue
             };
-            let key = (*hit_box).host.clone();
-            count_hit(&mut host_counters, hit_box.clone(), key);
-            let key = (*hit_box).path.clone();
-            count_hit(&mut path_counters, hit_box.clone(), key);
+            count_hit(&mut host_counters, &hit, &hit.host);
+            count_hit(&mut path_counters, &hit, &hit.path);
         }
         let counters = match mode {
             Host => &host_counters,

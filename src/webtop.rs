@@ -47,19 +47,6 @@ enum ProgramMode {
     Referer,
 }
 
-fn cmp_time(a: &Tm, b: &Tm) -> Ordering {
-    let va = vec![a.tm_year, a.tm_yday, a.tm_hour, a.tm_min, a.tm_sec, a.tm_nsec];
-    let vb = vec![b.tm_year, b.tm_yday, b.tm_hour, b.tm_min, b.tm_sec, b.tm_nsec];
-    for (ia, ib) in va.iter().zip(vb.iter()) {
-        match ia.cmp(ib) {
-            Equal => continue,
-            Less => return Less,
-            Greater => return Greater,
-        }
-    }
-    Equal
-}
-
 fn parse_line(line: &str) -> Option<Hit> {
     let re = regex!(r#"(\d+\.\d+\.\d+\.\d+) - - \[(.+) \+\d{4}\] "\w+ ([^ ]+) [^ "]+" (\d+) \d+ "([^"]*)" "([^"]*)""#);
     let cap = match re.captures(line) {
@@ -143,8 +130,8 @@ fn mainloop(filepath: &Path, maxlines: uint) -> i32 {
         }
         let mut sorted_visits: Vec<&Box<Visit>> = visits.values().collect();
         sorted_visits.sort_by(
-            |a, b| match (&b.hit_count).cmp(&a.hit_count) {
-                Equal => cmp_time(&b.last_hit_time, &a.last_hit_time),
+            |a, b| match (&a.hit_count).cmp(&b.hit_count).reverse() {
+                Equal => a.last_hit_time.to_timespec().cmp(&b.last_hit_time.to_timespec()).reverse(),
                 x => x,
             }
         );

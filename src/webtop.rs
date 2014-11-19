@@ -93,9 +93,23 @@ fn count_hit(visits: &mut VisitCounter, hit: &Hit, key: &String) {
     };
 }
 
+fn purge_visits(visits: &mut VisitCounter, last_seen_time: Tm) {
+    let mut toremove = Vec::new();
+    let last_seen_ts = last_seen_time.to_timespec();
+    for (key, value) in visits.iter() {
+        if last_seen_ts.sec - value.last_hit_time.to_timespec().sec > 5 * 60 {
+            toremove.push(key.clone());
+        }
+    }
+    for key in toremove.iter() {
+        visits.remove(key);
+    }
+}
+
 fn mainloop(filepath: &Path, maxlines: uint) -> i32 {
     let mut timer = ::std::io::Timer::new().unwrap();
     let mut last_size: i64 = 0;
+    let mut last_seen_time: Tm = time::now();
     let mut visits: VisitCounter = HashMap::new();
     let mut mode = Host;
     loop {
@@ -121,13 +135,15 @@ fn mainloop(filepath: &Path, maxlines: uint) -> i32 {
         let _ = fp.seek(-read_size, ::std::io::SeekEnd);
         let raw_contents = fp.read_to_end().unwrap();
         let contents = ::std::str::from_utf8(raw_contents.as_slice()).unwrap();
-        for line in contents.split('\n').rev() {
+        for line in contents.split('\n') {
             let hit = match parse_line(line) {
                 Some(hit) => hit,
                 None => continue
             };
             count_hit(&mut visits, &hit, &hit.host);
+            last_seen_time = hit.time;
         }
+        purge_visits(&mut visits, last_seen_time);
         let mut sorted_visits: Vec<&Box<Visit>> = visits.values().collect();
         sorted_visits.sort_by(
             |a, b| match (&a.hit_count).cmp(&b.hit_count).reverse() {
@@ -150,8 +166,8 @@ fn mainloop(filepath: &Path, maxlines: uint) -> i32 {
             Referer => "Referer",
         };
         let msg = format!(
-            "Last read: {} bytes. {} mode. Hit 'q' to quit, 'h/p/r' for the different modes",
-            read_size, mode_str
+            "{} active visits. Last read: {} bytes. {} mode. Hit 'q' to quit, 'h/p/r' for the different modes",
+            visits.len(), read_size, mode_str
         );
         mvprintw((maxlines+1) as i32, 0, msg.as_slice());
         refresh();

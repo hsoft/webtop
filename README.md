@@ -27,6 +27,9 @@ The program will then present you with a curses based interface showing you HTTP
 by Host, ordered by hit count. There's also the Path mode and the Referer mode which group hits
 differently.
 
+**Note:** Due to a recent refactoring, Path and Referer modes don't do anything (it didn't even
+work properly anyway). It will come back later.
+
 ## Keybindings
 
 * `q` - quit

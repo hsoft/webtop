@@ -28,7 +28,18 @@ struct Hit {
     agent: String,
 }
 
-type HitCounter = HashMap<String, Vec<Box<Hit>>>;
+#[deriving(Clone)]
+struct Visit {
+    host: String,
+    hit_count: uint,
+    first_hit_time: Tm,
+    last_hit_time: Tm,
+    last_path: String,
+    referer: String,
+    agent: String,
+}
+
+type VisitCounter = HashMap<String, Box<Visit>>;
 
 enum ProgramMode {
     Host,
@@ -71,25 +82,34 @@ fn parse_line(line: &str) -> Option<Hit> {
     })
 }
 
-fn count_hit(hit_counter: &mut HitCounter, hit: &Hit, key: &String) {
-    let _ = match hit_counter.entry(key.clone()) {
-        Vacant(_) => {}
+fn count_hit(visits: &mut VisitCounter, hit: &Hit, key: &String) {
+    let _ = match visits.entry(key.clone()) {
+        Vacant(e) => {
+            let visit = box Visit {
+                host: hit.host.clone(),
+                hit_count: 1,
+                first_hit_time: hit.time,
+                last_hit_time: hit.time,
+                last_path: hit.path.clone(),
+                referer: hit.referer.clone(),
+                agent: hit.agent.clone(),
+            };
+            e.set(visit);
+        }
         Occupied(e) => {
-            let mut counter: &mut Vec<Box<Hit>> = e.into_mut();
-            counter.push(box hit.clone());
+            let visit: &mut Box<Visit> = e.into_mut();
+            visit.hit_count += 1;
+            visit.last_hit_time = hit.time;
+            visit.last_path = hit.path.clone();
             return;
         },
     };
-    let counter = vec![box hit.clone()];
-    hit_counter.insert(key.clone(), counter);
 }
 
 fn mainloop(filepath: &Path, maxlines: uint) -> i32 {
     let mut timer = ::std::io::Timer::new().unwrap();
     let mut last_size: i64 = 0;
-    let mut host_counters: HitCounter = HashMap::new();
-    let mut path_counters: HitCounter = HashMap::new();
-    let mut referer_counters: HitCounter = HashMap::new();
+    let mut visits: VisitCounter = HashMap::new();
     let mut mode = Host;
     loop {
         let fsize = filepath.stat().ok().expect("can't stat").size as i64;
@@ -119,31 +139,23 @@ fn mainloop(filepath: &Path, maxlines: uint) -> i32 {
                 Some(hit) => hit,
                 None => continue
             };
-            count_hit(&mut host_counters, &hit, &hit.host);
-            count_hit(&mut path_counters, &hit, &hit.path);
-            count_hit(&mut referer_counters, &hit, &hit.referer);
+            count_hit(&mut visits, &hit, &hit.host);
         }
-        let counters = match mode {
-            Host => &host_counters,
-            URLPath => &path_counters,
-            Referer => &referer_counters,
-        };
-        let mut sorted_counters: Vec<&Vec<Box<Hit>>> = counters.values().collect();
-        sorted_counters.sort_by(
-            |a, b| match (&b.len()).cmp(&a.len()) {
-                Equal => cmp_time(&b[b.len()-1].time, &a[a.len()-1].time),
+        let mut sorted_visits: Vec<&Box<Visit>> = visits.values().collect();
+        sorted_visits.sort_by(
+            |a, b| match (&b.hit_count).cmp(&a.hit_count) {
+                Equal => cmp_time(&b.last_hit_time, &a.last_hit_time),
                 x => x,
             }
         );
         erase();
-        for (index, counter) in sorted_counters.iter().take(maxlines).enumerate() {
-            let hit = counter[counter.len()-1].clone();
-            let time_fmt = strftime("%Y-%m-%d %H:%M:%S", &hit.time).unwrap();
-            let hit_fmt = format!(
-                "{:>4} | {:<15} | {} | {} | {} | {}",
-                counter.len(), hit.host, time_fmt, hit.status, hit.path, hit.referer
+        for (index, visit) in sorted_visits.iter().take(maxlines).enumerate() {
+            let time_fmt = strftime("%Y-%m-%d %H:%M:%S", &visit.last_hit_time).unwrap();
+            let visit_fmt = format!(
+                "{:>4} | {:<15} | {} | {} | {}",
+                visit.hit_count, visit.host, time_fmt, visit.last_path, visit.referer
             );
-            mvprintw(index as i32, 0, hit_fmt.as_slice());
+            mvprintw(index as i32, 0, visit_fmt.as_slice());
         }
         let mode_str = match mode {
             Host => "Host",

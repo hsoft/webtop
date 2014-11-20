@@ -1,4 +1,3 @@
-#![feature(globs)]
 #![feature(phase)]
 #[phase(plugin)]
 
@@ -10,34 +9,20 @@ extern crate ncurses;
 use std::io::File;
 use std::io::fs::PathExtensions;
 use std::collections::hash_map::{HashMap, Occupied, Vacant};
-use time::{Tm, strptime, strftime, now};
-use ncurses::*;
+use time::{Tm, strftime, now};
+use ncurses::{
+    mvprintw, refresh, erase, initscr, getch, raw, keypad, nodelay, noecho, stdscr, getmaxy, endwin
+};
+use types::{Hit, Visit};
+use parse::parse_line;
+
+mod types;
+mod parse;
 
 const QUIT_KEY: i32 = 'q' as i32;
 const HOST_KEY: i32 = 'h' as i32;
 const PATH_KEY: i32 = 'p' as i32;
 const REFERER_KEY: i32 = 'r' as i32;
-
-#[deriving(Clone)]
-struct Hit {
-    host: String,
-    time: Tm,
-    status: uint,
-    path: String,
-    referer: String,
-    agent: String,
-}
-
-#[deriving(Clone)]
-struct Visit {
-    host: String,
-    hit_count: uint,
-    first_hit_time: Tm,
-    last_hit_time: Tm,
-    last_path: String,
-    referer: String,
-    agent: String,
-}
 
 type VisitCounter = HashMap<String, Box<Visit>>;
 
@@ -45,28 +30,6 @@ enum ProgramMode {
     Host,
     URLPath,
     Referer,
-}
-
-fn parse_line(line: &str) -> Option<Hit> {
-    let re = regex!(r#"(\d+\.\d+\.\d+\.\d+) - - \[(.+) \+\d{4}\] "\w+ ([^ ]+) [^ "]+" (\d+) \d+ "([^"]*)" "([^"]*)""#);
-    let cap = match re.captures(line) {
-        Some(cap) => cap,
-        None => return None
-    };
-    Some(Hit {
-        host: cap.at(1).to_string(),
-        time: match strptime(cap.at(2), "%d/%b/%Y:%H:%M:%S") {
-            Ok(tm) => tm,
-            Err(_) => now()
-        },
-        status: match from_str(cap.at(4)) {
-            Some(i) => i,
-            None => 999
-        },
-        path: cap.at(3).to_string(),
-        referer: cap.at(5).to_string(),
-        agent: cap.at(6).to_string(),
-    })
 }
 
 fn count_hit(visits: &mut VisitCounter, hit: &Hit, key: &String) {

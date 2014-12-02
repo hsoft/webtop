@@ -13,7 +13,7 @@ use time::{Tm, strftime, now};
 use ncurses::{
     mvprintw, refresh, erase, initscr, getch, raw, keypad, nodelay, noecho, stdscr, getmaxy, endwin
 };
-use types::{Hit, Visit};
+use types::Visit;
 use parse::parse_line;
 
 mod types;
@@ -24,7 +24,8 @@ const HOST_KEY: i32 = 'h' as i32;
 const PATH_KEY: i32 = 'p' as i32;
 const REFERER_KEY: i32 = 'r' as i32;
 
-type VisitCounter = HashMap<String, Box<Visit>>;
+type VisitHolder = HashMap<uint, Box<Visit>>;
+type HostVisitMap = HashMap<String, uint>;
 
 enum ProgramMode {
     Host,
@@ -32,40 +33,17 @@ enum ProgramMode {
     Referer,
 }
 
-fn count_hit(visits: &mut VisitCounter, hit: &Hit, key: &String) {
-    let _ = match visits.entry(key.clone()) {
-        Vacant(e) => {
-            let visit = box Visit {
-                host: hit.host.clone(),
-                hit_count: 1,
-                first_hit_time: hit.time,
-                last_hit_time: hit.time,
-                last_path: hit.path.clone(),
-                referer: hit.referer.clone(),
-                agent: hit.agent.clone(),
-            };
-            e.set(visit);
-        }
-        Occupied(e) => {
-            let visit: &mut Box<Visit> = e.into_mut();
-            visit.hit_count += 1;
-            visit.last_hit_time = hit.time;
-            visit.last_path = hit.path.clone();
-            return;
-        },
-    };
-}
-
-fn purge_visits(visits: &mut VisitCounter, last_seen_time: Tm) {
-    let mut toremove = Vec::new();
+fn purge_visits(visits: &mut VisitHolder, host_visit_map: &mut HostVisitMap, last_seen_time: Tm) {
+    let mut toremove: Vec<uint> = Vec::new();
     let last_seen_ts = last_seen_time.to_timespec();
-    for (key, value) in visits.iter() {
-        if last_seen_ts.sec - value.last_hit_time.to_timespec().sec > 5 * 60 {
-            toremove.push(key.clone());
+    for (visitid, visit) in visits.iter() {
+        if last_seen_ts.sec - visit.last_hit_time.to_timespec().sec > 5 * 60 {
+            toremove.push(*visitid);
+            host_visit_map.remove(&visit.host);
         }
     }
-    for key in toremove.iter() {
-        visits.remove(key);
+    for visitid in toremove.iter() {
+        visits.remove(visitid);
     }
 }
 
@@ -73,7 +51,9 @@ fn mainloop(filepath: &Path, maxlines: uint) -> i32 {
     let mut timer = ::std::io::Timer::new().unwrap();
     let mut last_size: i64 = 0;
     let mut last_seen_time: Tm = time::now();
-    let mut visits: VisitCounter = HashMap::new();
+    let mut visits: VisitHolder = HashMap::new();
+    let mut visit_counter:uint = 0;
+    let mut host_visit_map: HostVisitMap = HashMap::new();
     let mut mode = Host;
     loop {
         let fsize = filepath.stat().ok().expect("can't stat").size as i64;
@@ -103,10 +83,35 @@ fn mainloop(filepath: &Path, maxlines: uint) -> i32 {
                 Some(hit) => hit,
                 None => continue
             };
-            count_hit(&mut visits, &hit, &hit.host);
+            let key = &hit.host;
+            let visitid: uint = match host_visit_map.entry(key.clone()) {
+                Occupied(e) => {
+                    *e.get()
+                }
+                Vacant(e) => {
+                    visit_counter += 1;
+                    let visitid = visit_counter;
+                    let visit = box Visit {
+                        host: hit.host.clone(),
+                        hit_count: 0,
+                        first_hit_time: hit.time,
+                        last_hit_time: hit.time,
+                        last_path: hit.path.clone(),
+                        referer: hit.referer.clone(),
+                        agent: hit.agent.clone(),
+                    };
+                    visits.insert(visitid, visit);
+                    e.set(visitid);
+                    visitid
+                }
+            };
+            let visit: &mut Box<Visit> = visits.get_mut(&visitid).unwrap();
+            visit.hit_count += 1;
+            visit.last_hit_time = hit.time;
+            visit.last_path = hit.path.clone();
             last_seen_time = hit.time;
         }
-        purge_visits(&mut visits, last_seen_time);
+        purge_visits(&mut visits, &mut host_visit_map, last_seen_time);
         let mut sorted_visits: Vec<&Box<Visit>> = visits.values().collect();
         sorted_visits.sort_by(
             |a, b| match (&a.hit_count).cmp(&b.hit_count).reverse() {

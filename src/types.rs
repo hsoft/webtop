@@ -1,5 +1,3 @@
-extern crate time;
-
 use time::{Tm};
 
 #[deriving(Clone)]

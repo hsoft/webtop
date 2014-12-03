@@ -1,7 +1,3 @@
-extern crate regex_macros;
-extern crate regex;
-extern crate time;
-
 use time::{strptime, now};
 use types::Hit;
 

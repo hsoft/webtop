@@ -8,6 +8,9 @@ authors = [ "Virgil Dupras <hsoft@hardcoded.net>" ]
 
 name = "webtop"
 
+[dependencies]
+time = "*"
+
 [dependencies.ncurses]
 
 git = "https://github.com/jeaye/ncurses-rs.git"

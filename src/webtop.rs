@@ -1,11 +1,15 @@
 #![feature(box_syntax)]
+#![feature(core)]
+#![feature(env)]
+#![feature(std_misc)]
+#![feature(old_io)]
+#![feature(old_path)]
 #![feature(plugin)]
 #![plugin(regex_macros)]
 extern crate regex;
 extern crate time;
 extern crate ncurses;
 
-use std::old_io;
 use std::old_io::File;
 use std::old_io::fs::PathExtensions;
 use std::cmp::Ordering;
@@ -66,13 +70,13 @@ fn output_host_mode(visits: &VisitHolder, maxlines: usize) {
             "{:>4} | {:<15} | {} | {} | {}",
             visit.hit_count, visit.host, time_fmt, visit.last_path, visit.referer
         );
-        mvprintw(index as i32, 0, visit_fmt.as_slice());
+        mvprintw(index as i32, 0, &visit_fmt[..]);
     }
 }
 
 fn output_path_mode(path_visit_map: &PathVisitMap, maxlines: usize) {
     let mut sorted_path_chunks: Vec<(&str, usize)> = path_visit_map.iter().map(
-        |(key, value)| (key.as_slice(), value.len())
+        |(key, value)| (&key[..], value.len())
     ).collect();
     sorted_path_chunks.sort_by(
         |a, b| a.1.cmp(&b.1).reverse()
@@ -85,7 +89,7 @@ fn output_path_mode(path_visit_map: &PathVisitMap, maxlines: usize) {
             "{:>4} | {}",
             visit_count, path,
         );
-        mvprintw(index as i32, 0, path_fmt.as_slice());
+        mvprintw(index as i32, 0, &path_fmt[..]);
     }
 }
 
@@ -102,7 +106,7 @@ fn mainloop(filepath: &Path, maxlines: usize) -> i32 {
         let fsize = filepath.stat().ok().expect("can't stat").size as i64;
         if fsize < last_size {
             let msg = "Something weird is happening with the target file, skipping this round.";
-            mvprintw((maxlines+1) as i32, 0, msg.as_slice());
+            mvprintw((maxlines+1) as i32, 0, &msg[..]);
             continue;
         }
         let read_size: i64 = if last_size > 0 { fsize - last_size } else { 90000 };
@@ -114,13 +118,13 @@ fn mainloop(filepath: &Path, maxlines: usize) -> i32 {
                     "Had troube reading {}! Error: {}",
                     filepath.display(), e,
                 );
-                mvprintw((maxlines+1) as i32, 0, msg.as_slice());
+                mvprintw((maxlines+1) as i32, 0, &msg[..]);
                 continue;
             },
         };
         let _ = fp.seek(-read_size, ::std::old_io::SeekEnd);
         let raw_contents = fp.read_to_end().unwrap();
-        let contents = ::std::str::from_utf8(raw_contents.as_slice()).unwrap();
+        let contents = ::std::str::from_utf8(&raw_contents[..]).unwrap();
         for line in contents.split('\n') {
             let hit = match parse_line(line) {
                 Some(hit) => hit,
@@ -180,7 +184,7 @@ fn mainloop(filepath: &Path, maxlines: usize) -> i32 {
             "{} active visits. Last read: {} bytes. {} mode. Hit 'q' to quit, 'h/p/r' for the different modes",
             visits.len(), read_size, mode_str
         );
-        mvprintw((maxlines+1) as i32, 0, msg.as_slice());
+        mvprintw((maxlines+1) as i32, 0, &msg[..]);
         refresh();
         timer.sleep(::std::time::Duration::milliseconds(1000));
         let input = getch();
@@ -196,12 +200,13 @@ fn mainloop(filepath: &Path, maxlines: usize) -> i32 {
 
 fn main()
 {
-    let args = ::std::os::args();
+    let mut args = ::std::env::args();
     if args.len() < 2 {
         println!("You need to specify a file to watch.");
         return;
     }
-    let filepath = Path::new(args[1].as_slice());
+    let _ = args.next();
+    let filepath = Path::new(&args.next().unwrap()[..]);
     if !filepath.exists() {
         println!("{} doesn't exist! aborting.", filepath.display());
         return;

@@ -1,19 +1,19 @@
 use time::{Tm};
 
-#[deriving(Clone)]
+#[derive(Clone)]
 pub struct Hit {
     pub host: String,
     pub time: Tm,
-    pub status: uint,
+    pub status: usize,
     pub path: String,
     pub referer: String,
     pub agent: String,
 }
 
-#[deriving(Clone)]
+#[derive(Clone)]
 pub struct Visit {
     pub host: String,
-    pub hit_count: uint,
+    pub hit_count: usize,
     pub first_hit_time: Tm,
     pub last_hit_time: Tm,
     pub last_path: String,

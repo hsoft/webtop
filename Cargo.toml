@@ -9,9 +9,10 @@ authors = [ "Virgil Dupras <hsoft@hardcoded.net>" ]
 name = "webtop"
 
 [dependencies]
-time = "*"
+time = "0.1.17"
+regex = "0.1.15"
+regex_macros = "0.1.8"
 
 [dependencies.ncurses]
-
 git = "https://github.com/jeaye/ncurses-rs.git"
 

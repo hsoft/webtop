@@ -1,14 +1,15 @@
-#![feature(phase)]
-#[phase(plugin)]
-
-extern crate regex_macros;
+#![feature(box_syntax)]
+#![feature(plugin)]
+#![plugin(regex_macros)]
 extern crate regex;
 extern crate time;
 extern crate ncurses;
 
-use std::io::File;
-use std::io::fs::PathExtensions;
-use std::collections::hash_map::{HashMap, Occupied, Vacant};
+use std::old_io;
+use std::old_io::File;
+use std::old_io::fs::PathExtensions;
+use std::cmp::Ordering;
+use std::collections::hash_map::{HashMap, Entry};
 use std::collections::hash_set::HashSet;
 use time::{Tm, strftime, now};
 use ncurses::{
@@ -25,7 +26,7 @@ const HOST_KEY: i32 = 'h' as i32;
 const PATH_KEY: i32 = 'p' as i32;
 const REFERER_KEY: i32 = 'r' as i32;
 
-type VisitID = uint;
+type VisitID = usize;
 type VisitHolder = HashMap<VisitID, Box<Visit>>;
 type HostVisitMap = HashMap<String, VisitID>;
 type PathVisitMap = HashMap<String, Box<HashSet<VisitID>>>;
@@ -37,7 +38,7 @@ enum ProgramMode {
 }
 
 fn purge_visits(visits: &mut VisitHolder, host_visit_map: &mut HostVisitMap, last_seen_time: Tm) {
-    let mut toremove: Vec<uint> = Vec::new();
+    let mut toremove: Vec<usize> = Vec::new();
     let last_seen_ts = last_seen_time.to_timespec();
     for (visitid, visit) in visits.iter() {
         if last_seen_ts.sec - visit.last_hit_time.to_timespec().sec > 5 * 60 {
@@ -50,11 +51,11 @@ fn purge_visits(visits: &mut VisitHolder, host_visit_map: &mut HostVisitMap, las
     }
 }
 
-fn output_host_mode(visits: &VisitHolder, maxlines: uint) {
+fn output_host_mode(visits: &VisitHolder, maxlines: usize) {
     let mut sorted_visits: Vec<&Box<Visit>> = visits.values().collect();
     sorted_visits.sort_by(
         |a, b| match (&a.hit_count).cmp(&b.hit_count).reverse() {
-            Equal => a.last_hit_time.to_timespec().cmp(&b.last_hit_time.to_timespec()).reverse(),
+            Ordering::Equal => a.last_hit_time.to_timespec().cmp(&b.last_hit_time.to_timespec()).reverse(),
             x => x,
         }
     );
@@ -69,17 +70,17 @@ fn output_host_mode(visits: &VisitHolder, maxlines: uint) {
     }
 }
 
-fn output_path_mode(path_visit_map: &PathVisitMap, maxlines: uint) {
-    let mut sorted_path_chunks: Vec<(&str, uint)> = path_visit_map.iter().map(
+fn output_path_mode(path_visit_map: &PathVisitMap, maxlines: usize) {
+    let mut sorted_path_chunks: Vec<(&str, usize)> = path_visit_map.iter().map(
         |(key, value)| (key.as_slice(), value.len())
     ).collect();
     sorted_path_chunks.sort_by(
-        |a, b| a.val1().cmp(&b.val1()).reverse()
+        |a, b| a.1.cmp(&b.1).reverse()
     );
     erase();
     for (index, pair) in sorted_path_chunks.iter().take(maxlines).enumerate() {
-        let path = pair.val0();
-        let visit_count = pair.val1();
+        let path = pair.0;
+        let visit_count = pair.1;
         let path_fmt = format!(
             "{:>4} | {}",
             visit_count, path,
@@ -88,12 +89,12 @@ fn output_path_mode(path_visit_map: &PathVisitMap, maxlines: uint) {
     }
 }
 
-fn mainloop(filepath: &Path, maxlines: uint) -> i32 {
-    let mut timer = ::std::io::Timer::new().unwrap();
+fn mainloop(filepath: &Path, maxlines: usize) -> i32 {
+    let mut timer = ::std::old_io::Timer::new().unwrap();
     let mut last_size: i64 = 0;
     let mut last_seen_time: Tm = time::now();
     let mut visits: VisitHolder = HashMap::new();
-    let mut visit_counter:uint = 0;
+    let mut visit_counter:usize = 0;
     let mut host_visit_map: HostVisitMap = HashMap::new();
     let mut path_visit_map: PathVisitMap = HashMap::new();
     let mut mode = ProgramMode::Host;
@@ -117,7 +118,7 @@ fn mainloop(filepath: &Path, maxlines: uint) -> i32 {
                 continue;
             },
         };
-        let _ = fp.seek(-read_size, ::std::io::SeekEnd);
+        let _ = fp.seek(-read_size, ::std::old_io::SeekEnd);
         let raw_contents = fp.read_to_end().unwrap();
         let contents = ::std::str::from_utf8(raw_contents.as_slice()).unwrap();
         for line in contents.split('\n') {
@@ -127,10 +128,10 @@ fn mainloop(filepath: &Path, maxlines: uint) -> i32 {
             };
             let key = &hit.host;
             let visitid: VisitID = match host_visit_map.entry(key.clone()) {
-                Occupied(e) => {
+                Entry::Occupied(e) => {
                     *e.get()
                 }
-                Vacant(e) => {
+                Entry::Vacant(e) => {
                     visit_counter += 1;
                     let visitid = visit_counter;
                     let visit = box Visit {
@@ -143,7 +144,7 @@ fn mainloop(filepath: &Path, maxlines: uint) -> i32 {
                         agent: hit.agent.clone(),
                     };
                     visits.insert(visitid, visit);
-                    e.set(visitid);
+                    e.insert(visitid);
                     visitid
                 }
             };
@@ -154,14 +155,14 @@ fn mainloop(filepath: &Path, maxlines: uint) -> i32 {
             last_seen_time = hit.time;
             let key = &hit.path;
             match path_visit_map.entry(key.clone()) {
-                Occupied(e) => {
-                    let visits: &mut Box<HashSet<uint>> = e.into_mut();
+                Entry::Occupied(e) => {
+                    let visits: &mut Box<HashSet<usize>> = e.into_mut();
                     visits.insert(visitid);
                 }
-                Vacant(e) => {
+                Entry::Vacant(e) => {
                     let mut visits = box HashSet::new();
                     visits.insert(visitid);
-                    e.set(visits);
+                    e.insert(visits);
                 }
             };
         }
@@ -211,7 +212,7 @@ fn main()
     nodelay(stdscr, true);
     noecho();
 
-    let scry = getmaxy(stdscr) as uint;
+    let scry = getmaxy(stdscr) as usize;
     let maxlines = scry - 2;
 
     let last_input = mainloop(&filepath, maxlines);

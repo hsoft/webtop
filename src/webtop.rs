@@ -20,14 +20,18 @@ use ncurses::{
 };
 use types::Visit;
 use parse::parse_line;
+use screen::Screen;
 
 mod types;
 mod parse;
+mod screen;
 
 const QUIT_KEY: i32 = 'q' as i32;
 const HOST_KEY: i32 = 'h' as i32;
 const PATH_KEY: i32 = 'p' as i32;
 const REFERER_KEY: i32 = 'r' as i32;
+const UP_KEY: i32 = 259;
+const DOWN_KEY: i32 = 258;
 
 type VisitID = usize;
 type VisitHolder = HashMap<VisitID, Box<Visit>>;
@@ -54,7 +58,7 @@ fn purge_visits(visits: &mut VisitHolder, host_visit_map: &mut HostVisitMap, las
     }
 }
 
-fn output_host_mode(visits: &VisitHolder, maxlines: usize) {
+fn output_host_mode(visits: &VisitHolder, screen: &Screen) {
     let mut sorted_visits: Vec<&Box<Visit>> = visits.values().collect();
     sorted_visits.sort_by(
         |a, b| match (&a.hit_count).cmp(&b.hit_count).reverse() {
@@ -63,17 +67,17 @@ fn output_host_mode(visits: &VisitHolder, maxlines: usize) {
         }
     );
     erase();
-    for (index, visit) in sorted_visits.iter().take(maxlines).enumerate() {
+    for (index, visit) in sorted_visits.iter().take(screen.maxlines).enumerate() {
         let time_fmt = strftime("%Y-%m-%d %H:%M:%S", &visit.last_hit_time).unwrap();
         let visit_fmt = format!(
             "{:>4} | {:<15} | {} | {} | {}",
             visit.hit_count, visit.host, time_fmt, visit.last_path, visit.referer
         );
-        mvprintw(index as i32, 0, &visit_fmt[..]);
+        screen.printline(index, &visit_fmt[..]);
     }
 }
 
-fn output_path_mode(path_visit_map: &PathVisitMap, maxlines: usize) {
+fn output_path_mode(path_visit_map: &PathVisitMap, screen: &Screen) {
     let mut sorted_path_chunks: Vec<(&str, usize)> = path_visit_map.iter().map(
         |(key, value)| (&key[..], value.len())
     ).collect();
@@ -81,19 +85,20 @@ fn output_path_mode(path_visit_map: &PathVisitMap, maxlines: usize) {
         |a, b| a.1.cmp(&b.1).reverse()
     );
     erase();
-    for (index, pair) in sorted_path_chunks.iter().take(maxlines).enumerate() {
+    for (index, pair) in sorted_path_chunks.iter().take(screen.maxlines).enumerate() {
         let path = pair.0;
         let visit_count = pair.1;
         let path_fmt = format!(
             "{:>4} | {}",
             visit_count, path,
         );
-        mvprintw(index as i32, 0, &path_fmt[..]);
+        screen.printline(index, &path_fmt[..]);
     }
 }
 
 fn mainloop(filepath: &Path, maxlines: usize) -> i32 {
     let mut timer = ::std::old_io::Timer::new().unwrap();
+    let mut screen = Screen::new(maxlines);
     let mut last_size: i64 = 0;
     let mut last_seen_time: Tm = time::now();
     let mut visits: VisitHolder = HashMap::new();
@@ -105,7 +110,7 @@ fn mainloop(filepath: &Path, maxlines: usize) -> i32 {
         let fsize = filepath.stat().ok().expect("can't stat").size as i64;
         if fsize < last_size {
             let msg = "Something weird is happening with the target file, skipping this round.";
-            mvprintw((maxlines+1) as i32, 0, &msg[..]);
+            mvprintw((screen.maxlines+1) as i32, 0, &msg[..]);
             continue;
         }
         let read_size: i64 = if last_size > 0 { fsize - last_size } else { 90000 };
@@ -117,7 +122,7 @@ fn mainloop(filepath: &Path, maxlines: usize) -> i32 {
                     "Had troube reading {}! Error: {}",
                     filepath.display(), e,
                 );
-                mvprintw((maxlines+1) as i32, 0, &msg[..]);
+                mvprintw((screen.maxlines+1) as i32, 0, &msg[..]);
                 continue;
             },
         };
@@ -171,8 +176,8 @@ fn mainloop(filepath: &Path, maxlines: usize) -> i32 {
         }
         purge_visits(&mut visits, &mut host_visit_map, last_seen_time);
         match mode {
-            ProgramMode::URLPath => output_path_mode(&path_visit_map, maxlines),
-            _ => output_host_mode(&visits, maxlines),
+            ProgramMode::URLPath => output_path_mode(&path_visit_map, &screen),
+            _ => output_host_mode(&visits, &screen),
         };
         let mode_str = match mode {
             ProgramMode::Host => "Host",
@@ -183,7 +188,7 @@ fn mainloop(filepath: &Path, maxlines: usize) -> i32 {
             "{} active visits. Last read: {} bytes. {} mode. Hit 'q' to quit, 'h/p/r' for the different modes",
             visits.len(), read_size, mode_str
         );
-        mvprintw((maxlines+1) as i32, 0, &msg[..]);
+        mvprintw((screen.maxlines+1) as i32, 0, &msg[..]);
         refresh();
         timer.sleep(::std::time::Duration::milliseconds(1000));
         let input = getch();
@@ -192,6 +197,8 @@ fn mainloop(filepath: &Path, maxlines: usize) -> i32 {
             PATH_KEY => ProgramMode::URLPath,
             HOST_KEY => ProgramMode::Host,
             REFERER_KEY => ProgramMode::Referer,
+            UP_KEY => { screen.up(); mode },
+            DOWN_KEY => { screen.down(); mode },
             _ => mode,
         }
     }

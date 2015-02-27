@@ -1,4 +1,3 @@
-#![feature(box_syntax)]
 #![feature(core)]
 #![feature(env)]
 #![feature(std_misc)]
@@ -138,7 +137,7 @@ fn mainloop(filepath: &Path, maxlines: usize) -> i32 {
                 Entry::Vacant(e) => {
                     visit_counter += 1;
                     let visitid = visit_counter;
-                    let visit = box Visit {
+                    let visit = Box::new(Visit {
                         host: hit.host.clone(),
                         hit_count: 0,
                         first_hit_time: hit.time,
@@ -146,7 +145,7 @@ fn mainloop(filepath: &Path, maxlines: usize) -> i32 {
                         last_path: hit.path.clone(),
                         referer: hit.referer.clone(),
                         agent: hit.agent.clone(),
-                    };
+                    });
                     visits.insert(visitid, visit);
                     e.insert(visitid);
                     visitid
@@ -164,7 +163,7 @@ fn mainloop(filepath: &Path, maxlines: usize) -> i32 {
                     visits.insert(visitid);
                 }
                 Entry::Vacant(e) => {
-                    let mut visits = box HashSet::new();
+                    let mut visits = Box::new(HashSet::new());
                     visits.insert(visitid);
                     e.insert(visits);
                 }

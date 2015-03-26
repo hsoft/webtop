@@ -96,110 +96,127 @@ fn output_path_mode(path_visit_map: &PathVisitMap, screen: &Screen) {
     }
 }
 
+struct WholeThing {
+    screen: Screen,
+    last_size: i64,
+    last_seen_time: Tm,
+    visits: VisitHolder,
+    visit_counter: usize,
+    host_visit_map: HostVisitMap,
+    path_visit_map: PathVisitMap,
+    mode: ProgramMode,
+}
+
+fn refresh_visit_stats(filepath: &Path, wt: &mut WholeThing) {
+    let fsize = filepath.stat().ok().expect("can't stat").size as i64;
+    if fsize < wt.last_size {
+        let msg = "Something weird is happening with the target file, skipping this round.";
+        mvprintw((wt.screen.maxlines+1) as i32, 0, &msg[..]);
+        return;
+    }
+    let read_size: i64 = if wt.last_size > 0 { fsize - wt.last_size } else { 90000 };
+    wt.last_size = fsize;
+    let mut fp = match File::open(filepath) {
+        Ok(fp) => fp,
+        Err(e) => {
+            let msg = format!(
+                "Had troube reading {}! Error: {}",
+                filepath.display(), e,
+            );
+            mvprintw((wt.screen.maxlines+1) as i32, 0, &msg[..]);
+            return;
+        },
+    };
+    let _ = fp.seek(-read_size, ::std::old_io::SeekEnd);
+    let raw_contents = fp.read_to_end().unwrap();
+    let contents = ::std::str::from_utf8(&raw_contents[..]).unwrap();
+    for line in contents.split('\n') {
+        let hit = match parse_line(line) {
+            Some(hit) => hit,
+            None => continue
+        };
+        let key = &hit.host;
+        let visitid: VisitID = match wt.host_visit_map.entry(key.clone()) {
+            Entry::Occupied(e) => {
+                *e.get()
+            }
+            Entry::Vacant(e) => {
+                wt.visit_counter += 1;
+                let visitid = wt.visit_counter;
+                let visit = Box::new(Visit {
+                    host: hit.host.clone(),
+                    hit_count: 0,
+                    first_hit_time: hit.time,
+                    last_hit_time: hit.time,
+                    last_path: hit.path.clone(),
+                    referer: hit.referer.clone(),
+                    agent: hit.agent.clone(),
+                });
+                wt.visits.insert(visitid, visit);
+                e.insert(visitid);
+                visitid
+            }
+        };
+        let visit: &mut Box<Visit> = wt.visits.get_mut(&visitid).unwrap();
+        visit.hit_count += 1;
+        visit.last_hit_time = hit.time;
+        visit.last_path = hit.path.clone();
+        wt.last_seen_time = hit.time;
+        let key = &hit.path;
+        match wt.path_visit_map.entry(key.clone()) {
+            Entry::Occupied(e) => {
+                let visits: &mut Box<HashSet<usize>> = e.into_mut();
+                visits.insert(visitid);
+            }
+            Entry::Vacant(e) => {
+                let mut visits = Box::new(HashSet::new());
+                visits.insert(visitid);
+                e.insert(visits);
+            }
+        };
+    }
+    purge_visits(&mut wt.visits, &mut wt.host_visit_map, wt.last_seen_time);
+    match wt.mode {
+        ProgramMode::URLPath => output_path_mode(&wt.path_visit_map, &wt.screen),
+        _ => output_host_mode(&wt.visits, &wt.screen),
+    };
+    let mode_str = match wt.mode {
+        ProgramMode::Host => "Host",
+        ProgramMode::URLPath => "Path",
+        ProgramMode::Referer => "Referer",
+    };
+    let msg = format!(
+        "{} active visits. Last read: {} bytes. {} mode. Hit 'q' to quit, 'h/p/r' for the different modes",
+        wt.visits.len(), read_size, mode_str
+    );
+    mvprintw((wt.screen.maxlines+1) as i32, 0, &msg[..]);
+    refresh();
+}
+
 fn mainloop(filepath: &Path, maxlines: usize) -> i32 {
     let mut timer = ::std::old_io::Timer::new().unwrap();
-    let mut screen = Screen::new(maxlines);
-    let mut last_size: i64 = 0;
-    let mut last_seen_time: Tm = time::now();
-    let mut visits: VisitHolder = HashMap::new();
-    let mut visit_counter:usize = 0;
-    let mut host_visit_map: HostVisitMap = HashMap::new();
-    let mut path_visit_map: PathVisitMap = HashMap::new();
-    let mut mode = ProgramMode::Host;
+    let mut wt = WholeThing {
+        screen: Screen::new(maxlines),
+        last_size: 0,
+        last_seen_time:  time::now(),
+        visits: HashMap::new(),
+        visit_counter: 0,
+        host_visit_map: HashMap::new(),
+        path_visit_map: HashMap::new(),
+        mode: ProgramMode::Host,
+    };
     loop {
-        let fsize = filepath.stat().ok().expect("can't stat").size as i64;
-        if fsize < last_size {
-            let msg = "Something weird is happening with the target file, skipping this round.";
-            mvprintw((screen.maxlines+1) as i32, 0, &msg[..]);
-            continue;
-        }
-        let read_size: i64 = if last_size > 0 { fsize - last_size } else { 90000 };
-        last_size = fsize;
-        let mut fp = match File::open(filepath) {
-            Ok(fp) => fp,
-            Err(e) => {
-                let msg = format!(
-                    "Had troube reading {}! Error: {}",
-                    filepath.display(), e,
-                );
-                mvprintw((screen.maxlines+1) as i32, 0, &msg[..]);
-                continue;
-            },
-        };
-        let _ = fp.seek(-read_size, ::std::old_io::SeekEnd);
-        let raw_contents = fp.read_to_end().unwrap();
-        let contents = ::std::str::from_utf8(&raw_contents[..]).unwrap();
-        for line in contents.split('\n') {
-            let hit = match parse_line(line) {
-                Some(hit) => hit,
-                None => continue
-            };
-            let key = &hit.host;
-            let visitid: VisitID = match host_visit_map.entry(key.clone()) {
-                Entry::Occupied(e) => {
-                    *e.get()
-                }
-                Entry::Vacant(e) => {
-                    visit_counter += 1;
-                    let visitid = visit_counter;
-                    let visit = Box::new(Visit {
-                        host: hit.host.clone(),
-                        hit_count: 0,
-                        first_hit_time: hit.time,
-                        last_hit_time: hit.time,
-                        last_path: hit.path.clone(),
-                        referer: hit.referer.clone(),
-                        agent: hit.agent.clone(),
-                    });
-                    visits.insert(visitid, visit);
-                    e.insert(visitid);
-                    visitid
-                }
-            };
-            let visit: &mut Box<Visit> = visits.get_mut(&visitid).unwrap();
-            visit.hit_count += 1;
-            visit.last_hit_time = hit.time;
-            visit.last_path = hit.path.clone();
-            last_seen_time = hit.time;
-            let key = &hit.path;
-            match path_visit_map.entry(key.clone()) {
-                Entry::Occupied(e) => {
-                    let visits: &mut Box<HashSet<usize>> = e.into_mut();
-                    visits.insert(visitid);
-                }
-                Entry::Vacant(e) => {
-                    let mut visits = Box::new(HashSet::new());
-                    visits.insert(visitid);
-                    e.insert(visits);
-                }
-            };
-        }
-        purge_visits(&mut visits, &mut host_visit_map, last_seen_time);
-        match mode {
-            ProgramMode::URLPath => output_path_mode(&path_visit_map, &screen),
-            _ => output_host_mode(&visits, &screen),
-        };
-        let mode_str = match mode {
-            ProgramMode::Host => "Host",
-            ProgramMode::URLPath => "Path",
-            ProgramMode::Referer => "Referer",
-        };
-        let msg = format!(
-            "{} active visits. Last read: {} bytes. {} mode. Hit 'q' to quit, 'h/p/r' for the different modes",
-            visits.len(), read_size, mode_str
-        );
-        mvprintw((screen.maxlines+1) as i32, 0, &msg[..]);
-        refresh();
+        refresh_visit_stats(filepath, &mut wt);
         timer.sleep(::std::time::Duration::milliseconds(1000));
         let input = getch();
-        mode = match input {
+        wt.mode = match input {
             QUIT_KEY => return input,
             PATH_KEY => ProgramMode::URLPath,
             HOST_KEY => ProgramMode::Host,
             REFERER_KEY => ProgramMode::Referer,
-            UP_KEY => { screen.up(); mode },
-            DOWN_KEY => { screen.down(); mode },
-            _ => mode,
+            UP_KEY => { wt.screen.up(); wt.mode },
+            DOWN_KEY => { wt.screen.down(); wt.mode },
+            _ => wt.mode,
         }
     }
 }

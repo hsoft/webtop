@@ -14,7 +14,7 @@ use std::old_io::fs::PathExtensions;
 use std::cmp::Ordering;
 use std::collections::hash_map::{HashMap, Entry};
 use std::collections::hash_set::HashSet;
-use time::{Tm, strftime, now};
+use time::{Tm, strftime, now, precise_time_s};
 use ncurses::{
     mvprintw, refresh, erase, initscr, getch, raw, keypad, nodelay, noecho, stdscr, getmaxy, endwin
 };
@@ -38,6 +38,8 @@ type VisitHolder = HashMap<VisitID, Box<Visit>>;
 type HostVisitMap = HashMap<String, VisitID>;
 type PathVisitMap = HashMap<String, Box<HashSet<VisitID>>>;
 
+#[derive(PartialEq)]
+#[derive(Copy)]
 enum ProgramMode {
     Host,
     URLPath,
@@ -195,6 +197,7 @@ fn refresh_visit_stats(filepath: &Path, wt: &mut WholeThing) {
 
 fn mainloop(filepath: &Path, maxlines: usize) -> i32 {
     let mut timer = ::std::old_io::Timer::new().unwrap();
+    let mut last_refresh_time: f64 = 0.0;
     let mut wt = WholeThing {
         screen: Screen::new(maxlines),
         last_size: 0,
@@ -206,17 +209,23 @@ fn mainloop(filepath: &Path, maxlines: usize) -> i32 {
         mode: ProgramMode::Host,
     };
     loop {
-        refresh_visit_stats(filepath, &mut wt);
-        timer.sleep(::std::time::Duration::milliseconds(1000));
+        if precise_time_s() - last_refresh_time > 1.0 {
+            refresh_visit_stats(filepath, &mut wt);
+            last_refresh_time = precise_time_s();
+        }
+        timer.sleep(::std::time::Duration::milliseconds(50));
         let input = getch();
-        wt.mode = match input {
-            QUIT_KEY => return input,
-            PATH_KEY => ProgramMode::URLPath,
-            HOST_KEY => ProgramMode::Host,
-            REFERER_KEY => ProgramMode::Referer,
-            UP_KEY => { wt.screen.up(); wt.mode },
-            DOWN_KEY => { wt.screen.down(); wt.mode },
-            _ => wt.mode,
+        if input >= 0 {
+            wt.mode = match input {
+                QUIT_KEY => return input,
+                PATH_KEY => ProgramMode::URLPath,
+                HOST_KEY => ProgramMode::Host,
+                REFERER_KEY => ProgramMode::Referer,
+                UP_KEY => { wt.screen.up(); wt.mode },
+                DOWN_KEY => { wt.screen.down(); wt.mode },
+                _ => wt.mode,
+            };
+            last_refresh_time = 0.0;
         }
     }
 }

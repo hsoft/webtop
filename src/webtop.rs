@@ -16,7 +16,7 @@ use std::collections::hash_map::{HashMap, Entry};
 use std::collections::hash_set::HashSet;
 use time::{Tm, strftime, now, precise_time_s};
 use ncurses::{
-    mvprintw, refresh, erase, initscr, getch, raw, keypad, nodelay, noecho, stdscr, getmaxy, endwin
+    mvprintw, refresh, initscr, getch, raw, keypad, nodelay, noecho, stdscr, getmaxy, endwin
 };
 use types::Visit;
 use parse::parse_line;
@@ -60,7 +60,7 @@ fn purge_visits(visits: &mut VisitHolder, host_visit_map: &mut HostVisitMap, las
     }
 }
 
-fn output_host_mode(visits: &VisitHolder, screen: &Screen) {
+fn output_host_mode(visits: &VisitHolder, screen: &mut Screen) {
     let mut sorted_visits: Vec<&Box<Visit>> = visits.values().collect();
     sorted_visits.sort_by(
         |a, b| match (&a.hit_count).cmp(&b.hit_count).reverse() {
@@ -68,7 +68,7 @@ fn output_host_mode(visits: &VisitHolder, screen: &Screen) {
             x => x,
         }
     );
-    erase();
+    screen.erase();
     for (index, visit) in sorted_visits.iter().take(screen.maxlines).enumerate() {
         let time_fmt = strftime("%Y-%m-%d %H:%M:%S", &visit.last_hit_time).unwrap();
         let visit_fmt = format!(
@@ -77,16 +77,17 @@ fn output_host_mode(visits: &VisitHolder, screen: &Screen) {
         );
         screen.printline(index, &visit_fmt[..]);
     }
+    screen.adjust_selection();
 }
 
-fn output_path_mode(path_visit_map: &PathVisitMap, screen: &Screen) {
+fn output_path_mode(path_visit_map: &PathVisitMap, screen: &mut Screen) {
     let mut sorted_path_chunks: Vec<(&str, usize)> = path_visit_map.iter().map(
         |(key, value)| (&key[..], value.len())
     ).collect();
     sorted_path_chunks.sort_by(
         |a, b| a.1.cmp(&b.1).reverse()
     );
-    erase();
+    screen.erase();
     for (index, pair) in sorted_path_chunks.iter().take(screen.maxlines).enumerate() {
         let path = pair.0;
         let visit_count = pair.1;
@@ -96,6 +97,7 @@ fn output_path_mode(path_visit_map: &PathVisitMap, screen: &Screen) {
         );
         screen.printline(index, &path_fmt[..]);
     }
+    screen.adjust_selection();
 }
 
 struct WholeThing {
@@ -179,8 +181,8 @@ fn refresh_visit_stats(filepath: &Path, wt: &mut WholeThing) {
     }
     purge_visits(&mut wt.visits, &mut wt.host_visit_map, wt.last_seen_time);
     match wt.mode {
-        ProgramMode::URLPath => output_path_mode(&wt.path_visit_map, &wt.screen),
-        _ => output_host_mode(&wt.visits, &wt.screen),
+        ProgramMode::URLPath => output_path_mode(&wt.path_visit_map, &mut wt.screen),
+        _ => output_host_mode(&wt.visits, &mut wt.screen),
     };
     let mode_str = match wt.mode {
         ProgramMode::Host => "Host",

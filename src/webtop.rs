@@ -3,7 +3,6 @@
 #![feature(std_misc)]
 #![feature(old_io)]
 #![feature(old_path)]
-#![feature(collections)]
 #![feature(plugin)]
 #![plugin(regex_macros)]
 extern crate regex;
@@ -45,12 +44,6 @@ enum ProgramMode {
     Host,
     URLPath,
     Referer,
-}
-
-#[derive(Copy)]
-enum PathOrStdin<'a> {
-    Path(&'a Path),
-    Stdin,
 }
 
 fn purge_visits(visits: &mut VisitHolder, host_visit_map: &mut HostVisitMap, last_seen_time: Tm) {
@@ -118,34 +111,29 @@ struct WholeThing {
     mode: ProgramMode,
 }
 
-fn refresh_visit_stats(inpath: PathOrStdin, wt: &mut WholeThing) {
-    let (contents, read_size) = match inpath {
-        PathOrStdin::Path(filepath) => {
-            let fsize = filepath.stat().ok().expect("can't stat").size as i64;
-            if fsize < wt.last_size {
-                let msg = "Something weird is happening with the target file, skipping this round.";
-                mvprintw((wt.screen.maxlines+1) as i32, 0, &msg[..]);
-                return;
-            }
-            let read_size: i64 = if wt.last_size > 0 { fsize - wt.last_size } else { 90000 };
-            wt.last_size = fsize;
-            let mut fp = match File::open(filepath) {
-                Ok(fp) => fp,
-                Err(e) => {
-                    let msg = format!(
-                        "Had troube reading {}! Error: {}",
-                        filepath.display(), e,
-                    );
-                    mvprintw((wt.screen.maxlines+1) as i32, 0, &msg[..]);
-                    return;
-                },
-            };
-            let _ = fp.seek(-read_size, ::std::old_io::SeekEnd);
-            let raw_contents = fp.read_to_end().unwrap();
-            (String::from_str(::std::str::from_utf8(&raw_contents[..]).unwrap()), read_size)
+fn refresh_visit_stats(filepath: &Path, wt: &mut WholeThing) {
+    let fsize = filepath.stat().ok().expect("can't stat").size as i64;
+    if fsize < wt.last_size {
+        let msg = "Something weird is happening with the target file, skipping this round.";
+        mvprintw((wt.screen.maxlines+1) as i32, 0, &msg[..]);
+        return;
+    }
+    let read_size: i64 = if wt.last_size > 0 { fsize - wt.last_size } else { 90000 };
+    wt.last_size = fsize;
+    let mut fp = match File::open(filepath) {
+        Ok(fp) => fp,
+        Err(e) => {
+            let msg = format!(
+                "Had troube reading {}! Error: {}",
+                filepath.display(), e,
+            );
+            mvprintw((wt.screen.maxlines+1) as i32, 0, &msg[..]);
+            return;
         },
-        PathOrStdin::Stdin => (String::from_str("104.50.140.239 - - [11/Nov/2014:01:39:09 +0000] \"GET /itworks HTTP/1.1\" 200 1170 \"http://www.hardcoded.net/dupeguru/\" \"Mozilla/5.0 (Windows NT 6.3; WOW64; rv:33.0) Gecko/20100101 Firefox/33.0\""), 42),
     };
+    let _ = fp.seek(-read_size, ::std::old_io::SeekEnd);
+    let raw_contents = fp.read_to_end().unwrap();
+    let contents = ::std::str::from_utf8(&raw_contents[..]).unwrap();
     for line in contents.split('\n') {
         let hit = match parse_line(line) {
             Some(hit) => hit,
@@ -209,7 +197,7 @@ fn refresh_visit_stats(inpath: PathOrStdin, wt: &mut WholeThing) {
     refresh();
 }
 
-fn mainloop(filepath: PathOrStdin, maxlines: usize) -> i32 {
+fn mainloop(filepath: &Path, maxlines: usize) -> i32 {
     let mut timer = ::std::old_io::Timer::new().unwrap();
     let mut last_refresh_time: f64 = 0.0;
     let mut wt = WholeThing {
@@ -252,18 +240,11 @@ fn main()
         return;
     }
     let _ = args.next();
-    let inpath = &args.next().unwrap()[..];
-    let filepath = &Path::new(inpath);
-    let path = match inpath {
-        "-" => PathOrStdin::Stdin,
-        _ => {
-            if !filepath.exists() {
-                println!("{} doesn't exist! aborting.", filepath.display());
-                return;
-            }
-            PathOrStdin::Path(filepath)
-        },
-    };
+    let filepath = Path::new(&args.next().unwrap()[..]);
+    if !filepath.exists() {
+        println!("{} doesn't exist! aborting.", filepath.display());
+        return;
+    }
     initscr();
     raw();
     keypad(stdscr, true);
@@ -273,7 +254,7 @@ fn main()
     let scry = getmaxy(stdscr) as usize;
     let maxlines = scry - 2;
 
-    let last_input = mainloop(path, maxlines);
+    let last_input = mainloop(&filepath, maxlines);
 
     endwin();
     println!("Program ended with last input {}", last_input);

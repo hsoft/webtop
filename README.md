@@ -5,7 +5,7 @@ for something, anything. I though "well, why not yet another apachetop?".
 
 It's built on curses using [ncurses-rs][ncurses-rs]
 
-# Compiling
+## Compiling
 
 To compile this, you need to be on Rust 0.13 nightly. You calso need Cargo.
 
@@ -15,7 +15,7 @@ Then, it's only a matter of:
 
 The resulting `webtop` binary will end up in the `target/` subfolder.
 
-# Usage
+## Usage
 
 It has very limited functionality, but the basics are that you call `webtop` with the target
 log file you want to watch. Example: `./webtop www.access.log`.
@@ -30,12 +30,18 @@ differently.
 **Note:** Due to a recent refactoring, Path and Referer modes don't do anything (it didn't even
 work properly anyway). It will come back later.
 
-## Keybindings
+### Keybindings
 
 * `q` - quit
 * `h` - Host mode
 * `p` - Path mode
 * `r` - Referer mode
+
+## Unsafe code
+
+There's some usage of unsafe code in the program:
+
+* TTY fiddling with `libc::isatty()`, `libc::fdopen()` and `libc::fopen()`.
 
 [ncurses-rs]: https://github.com/jeaye/ncurses-rs
 

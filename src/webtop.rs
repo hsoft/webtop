@@ -3,12 +3,15 @@
 #![feature(std_misc)]
 #![feature(old_io)]
 #![feature(old_path)]
+#![feature(libc)]
 #![feature(plugin)]
 #![plugin(regex_macros)]
 extern crate regex;
 extern crate time;
 extern crate ncurses;
+extern crate libc;
 
+use std::ffi::CString;
 use std::old_io::File;
 use std::old_io::fs::PathExtensions;
 use std::cmp::Ordering;
@@ -16,7 +19,8 @@ use std::collections::hash_map::{HashMap, Entry};
 use std::collections::hash_set::HashSet;
 use time::{Tm, strftime, now, precise_time_s};
 use ncurses::{
-    mvprintw, refresh, initscr, getch, raw, keypad, nodelay, noecho, stdscr, getmaxy, endwin
+    mvprintw, refresh, initscr, getch, raw, keypad, nodelay, noecho, stdscr, getmaxy, endwin,
+    newterm, set_term
 };
 use types::Visit;
 use parse::parse_line;
@@ -245,7 +249,22 @@ fn main()
         println!("{} doesn't exist! aborting.", filepath.display());
         return;
     }
-    initscr();
+    if unsafe { libc::isatty(libc::STDIN_FILENO) } != 1 {
+        println!("STDIN is not a terminal. Trying to get in touch with a terminal now...");
+        let tty_fp = unsafe { libc::fopen(
+            CString::new(&"/dev/tty"[..]).unwrap().as_ptr(),
+            CString::new(&"r"[..]).unwrap().as_ptr(),
+        )};
+        let stdout_fp = unsafe { libc::fdopen(
+            libc::STDOUT_FILENO,
+            CString::new(&"w"[..]).unwrap().as_ptr(),
+        )};
+        let term = newterm(None, stdout_fp, tty_fp);
+        set_term(term);
+    }
+    else {
+        initscr();
+    }
     raw();
     keypad(stdscr, true);
     nodelay(stdscr, true);

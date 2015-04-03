@@ -18,7 +18,7 @@ The resulting `webtop` binary will end up in the `target/` subfolder.
 ## Usage
 
 It has very limited functionality, but the basics are that you call `webtop` with the target
-log file you want to watch. Example: `./webtop www.access.log`.
+log file you want to watch. Example: `webtop www.access.log`.
 
 The program only reads the end of the target file. It works by repeatedly `stat`-ing the target
 file and read the size difference from the last stat.
@@ -29,6 +29,14 @@ differently.
 
 **Note:** Due to a recent refactoring, Path and Referer modes don't do anything (it didn't even
 work properly anyway). It will come back later.
+
+### Piping STDIN
+
+You can read `STDIN` by passing `-` as an argument to `webtop`. For example, if you are watching
+a remote file, you could use `tail -f www.access.log | webtop -`.
+
+Note that when you quit, because `STDIN` is still open, the process will not quit until you press
+`CTRL-C`. I haven't managed to work around that limitation yet.
 
 ### Keybindings
 

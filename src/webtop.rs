@@ -4,7 +4,6 @@
 #![feature(old_io)]
 #![feature(old_path)]
 #![feature(libc)]
-#![feature(collections)]
 #![feature(plugin)]
 #![plugin(regex_macros)]
 extern crate regex;
@@ -18,6 +17,9 @@ use std::old_io::fs::PathExtensions;
 use std::cmp::Ordering;
 use std::collections::hash_map::{HashMap, Entry};
 use std::collections::hash_set::HashSet;
+use std::sync::mpsc::{Sender, Receiver};
+use std::sync::mpsc;
+use std::thread;
 use time::{Tm, strftime, now, precise_time_s};
 use ncurses::{
     mvprintw, refresh, initscr, getch, raw, keypad, nodelay, noecho, stdscr, getmaxy, endwin,
@@ -54,7 +56,7 @@ enum ProgramMode {
 #[derive(Copy)]
 enum PathOrStdin<'a> {
     Path(&'a Path),
-    Stdin,
+    Stdin(&'a Receiver<String>),
 }
 
 fn purge_visits(visits: &mut VisitHolder, host_visit_map: &mut HostVisitMap, last_seen_time: Tm) {
@@ -123,7 +125,7 @@ struct WholeThing {
 }
 
 fn refresh_visit_stats(inpath: PathOrStdin, wt: &mut WholeThing) {
-    let (contents, read_size) = match inpath {
+    let contents = match inpath {
         PathOrStdin::Path(filepath) => {
             let fsize = filepath.stat().ok().expect("can't stat").size as i64;
             if fsize < wt.last_size {
@@ -145,11 +147,22 @@ fn refresh_visit_stats(inpath: PathOrStdin, wt: &mut WholeThing) {
                 },
             };
             let _ = fp.seek(-read_size, ::std::old_io::SeekEnd);
-            let raw_contents = fp.read_to_end().unwrap();
-            (String::from_str(::std::str::from_utf8(&raw_contents[..]).unwrap()), read_size)
+            fp.read_to_string().unwrap()
         },
-        PathOrStdin::Stdin => (String::from_str("104.50.140.239 - - [11/Nov/2014:01:39:09 +0000] \"GET /itworks HTTP/1.1\" 200 1170 \"http://www.hardcoded.net/dupeguru/\" \"Mozilla/5.0 (Windows NT 6.3; WOW64; rv:33.0) Gecko/20100101 Firefox/33.0\""), 42),
+        PathOrStdin::Stdin(rx) => {
+            let mut res = String::new();
+            loop {
+                match rx.try_recv() {
+                    Ok(msg) => {
+                        res.push_str(&msg[..]);
+                    },
+                    Err(_) => { break; }
+                }
+            }
+            res
+        },
     };
+    let read_size = contents.len();
     for line in contents.split('\n') {
         let hit = match parse_line(line) {
             Some(hit) => hit,
@@ -258,8 +271,19 @@ fn main()
     let _ = args.next();
     let inpath = &args.next().unwrap()[..];
     let filepath = &Path::new(inpath);
+    let (stdin_tx, stdin_rx): (Sender<String>, Receiver<String>) = mpsc::channel();
+    let (stdin_stopped_tx, stdin_stopped_rx): (Sender<bool>, Receiver<bool>) = mpsc::channel();
     let path = match inpath {
-        "-" => PathOrStdin::Stdin,
+        "-" => {
+            thread::spawn(move || {
+                let mut stdin = ::std::old_io::stdin();
+                for line in stdin.lock().lines() {
+                    stdin_tx.send(line.unwrap()).unwrap();
+                }
+                stdin_stopped_tx.send(true).unwrap();
+            });
+            PathOrStdin::Stdin(&stdin_rx)
+        },
         _ => {
             if !filepath.exists() {
                 println!("{} doesn't exist! aborting.", filepath.display());
@@ -296,5 +320,16 @@ fn main()
 
     endwin();
     println!("Program ended with last input {}", last_input);
+    match path {
+        PathOrStdin::Stdin(_) => {
+            match stdin_stopped_rx.try_recv() {
+                Err(_) => {
+                    println!("STDIN still active, process stalled. Press CTRL-C to end it.");
+                }
+                _ => {},
+            }
+        },
+        _ => {},
+    }
 }
 

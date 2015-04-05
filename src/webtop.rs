@@ -276,7 +276,9 @@ fn main()
             thread::spawn(move || {
                 let stdin = io::stdin();
                 for line in stdin.lock().lines() {
-                    stdin_tx.send(line.unwrap()).unwrap();
+                    let mut topush = line.unwrap();
+                    topush.push_str(&"\n");
+                    stdin_tx.send(topush).unwrap();
                 }
                 stdin_stopped_tx.send(true).unwrap();
             });

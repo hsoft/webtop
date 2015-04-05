@@ -11,13 +11,11 @@ use std::io;
 use std::fs;
 use std::ffi::CString;
 use std::cmp::Ordering;
-use std::collections::hash_map::{Entry};
-use std::collections::hash_set::HashSet;
 use std::path::Path;
 use std::sync::mpsc::{Sender, Receiver};
 use std::sync::mpsc;
 use std::thread;
-use time::{Tm, strftime, precise_time_s};
+use time::{strftime, precise_time_s};
 use ncurses::{
     mvprintw, refresh, initscr, getch, raw, keypad, nodelay, noecho, stdscr, getmaxy, endwin,
     newterm, set_term
@@ -49,20 +47,6 @@ enum ProgramMode {
 enum PathOrStdin<'a> {
     Path(&'a Path),
     Stdin(&'a Receiver<String>),
-}
-
-fn purge_visits(visits: &mut VisitHolder, host_visit_map: &mut HostVisitMap, last_seen_time: Tm) {
-    let mut toremove: Vec<u32> = Vec::new();
-    let last_seen_ts = last_seen_time.to_timespec();
-    for (visitid, visit) in visits.iter() {
-        if last_seen_ts.sec - visit.last_hit_time.to_timespec().sec > 5 * 60 {
-            toremove.push(*visitid);
-            host_visit_map.remove(&visit.host);
-        }
-    }
-    for visitid in toremove.iter() {
-        visits.remove(visitid);
-    }
 }
 
 fn output_host_mode(visits: &VisitHolder, screen: &mut Screen) {
@@ -160,47 +144,9 @@ fn refresh_visit_stats(inpath: PathOrStdin, wt: &mut WholeThing) {
             Some(hit) => hit,
             None => continue
         };
-        let key = &hit.host;
-        let visitid: VisitID = match wt.visit_stats.host_visit_map.entry(key.clone()) {
-            Entry::Occupied(e) => {
-                *e.get()
-            }
-            Entry::Vacant(e) => {
-                wt.visit_stats.visit_counter += 1;
-                let visitid = wt.visit_stats.visit_counter;
-                let visit = Box::new(Visit {
-                    host: hit.host.clone(),
-                    hit_count: 0,
-                    first_hit_time: hit.time,
-                    last_hit_time: hit.time,
-                    last_path: hit.path.clone(),
-                    referer: hit.referer.clone(),
-                    agent: hit.agent.clone(),
-                });
-                wt.visit_stats.visits.insert(visitid, visit);
-                e.insert(visitid);
-                visitid
-            }
-        };
-        let visit: &mut Box<Visit> = wt.visit_stats.visits.get_mut(&visitid).unwrap();
-        visit.hit_count += 1;
-        visit.last_hit_time = hit.time;
-        visit.last_path = hit.path.clone();
-        wt.visit_stats.last_seen_time = hit.time;
-        let key = &hit.path;
-        match wt.visit_stats.path_visit_map.entry(key.clone()) {
-            Entry::Occupied(e) => {
-                let visits: &mut Box<HashSet<u32>> = e.into_mut();
-                visits.insert(visitid);
-            }
-            Entry::Vacant(e) => {
-                let mut visits = Box::new(HashSet::new());
-                visits.insert(visitid);
-                e.insert(visits);
-            }
-        };
+        wt.visit_stats.feed_hit(&hit);
     }
-    purge_visits(&mut wt.visit_stats.visits, &mut wt.visit_stats.host_visit_map, wt.visit_stats.last_seen_time);
+    wt.visit_stats.purge_visits();
     match wt.mode {
         ProgramMode::URLPath => output_path_mode(&wt.visit_stats.path_visit_map, &mut wt.screen),
         _ => output_host_mode(&wt.visit_stats.visits, &mut wt.screen),

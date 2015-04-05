@@ -80,7 +80,7 @@ fn output_host_mode(visits: &VisitHolder, screen: &mut Screen) {
     );
     screen.erase();
     for (index, visit) in sorted_visits.iter().take(screen.maxlines).enumerate() {
-        let time_fmt = strftime("%Y-%m-%d %H:%M:%S", &visit.last_hit_time).unwrap();
+        let time_fmt = strftime("%H:%M:%S", &visit.last_hit_time).unwrap();
         let visit_fmt = format!(
             "{:>4} | {:<15} | {} | {} | {}",
             visit.hit_count, visit.host, time_fmt, visit.last_path, visit.referer

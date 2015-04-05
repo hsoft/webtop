@@ -1,6 +1,4 @@
-#![feature(std_misc)]
 #![feature(libc)]
-#![feature(old_io)]
 #![feature(plugin)]
 #![plugin(regex_macros)]
 extern crate regex;
@@ -228,7 +226,6 @@ fn refresh_visit_stats(inpath: PathOrStdin, wt: &mut WholeThing) {
 }
 
 fn mainloop(filepath: PathOrStdin, maxlines: usize) -> i32 {
-    let mut timer = ::std::old_io::Timer::new().unwrap();
     let mut last_refresh_time: f64 = 0.0;
     let mut wt = WholeThing {
         screen: Screen::new(maxlines),
@@ -245,7 +242,7 @@ fn mainloop(filepath: PathOrStdin, maxlines: usize) -> i32 {
             refresh_visit_stats(filepath, &mut wt);
             last_refresh_time = precise_time_s();
         }
-        timer.sleep(::std::time::Duration::milliseconds(50));
+        thread::sleep_ms(50);
         let input = getch();
         if input >= 0 {
             wt.mode = match input {

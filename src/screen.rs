@@ -1,6 +1,6 @@
 use std::cmp::{min, max};
 use ncurses::{
-    mvprintw, erase, attron, attroff, A_REVERSE
+    mvaddstr, erase, attron, attroff, A_REVERSE
 };
 
 pub struct Screen {
@@ -27,7 +27,7 @@ impl Screen {
         if self.selected_index == index {
             attron(A_REVERSE());
         }
-        mvprintw(index as i32, 0, msg);
+        mvaddstr(index as i32, 0, msg);
         attroff(A_REVERSE());
         self.maxindex = max(self.maxindex, index);
     }

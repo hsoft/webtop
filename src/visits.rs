@@ -1,5 +1,7 @@
-use std::collections::hash_map::{HashMap, Entry};
+use std::cmp::Ordering;
+use std::collections::hash_map;
 use std::collections::hash_set::HashSet;
+use std::vec;
 
 #[derive(Clone)]
 pub struct Hit {
@@ -23,16 +25,16 @@ pub struct Visit {
 }
 
 type VisitID = u32;
-pub type VisitHolder = HashMap<VisitID, Box<Visit>>;
-pub type HostVisitMap = HashMap<String, VisitID>;
-pub type PathVisitMap = HashMap<String, Box<HashSet<VisitID>>>;
+type VisitHolder = hash_map::HashMap<VisitID, Box<Visit>>;
+type HostVisitMap = hash_map::HashMap<String, VisitID>;
+type PathVisitMap = hash_map::HashMap<String, Box<HashSet<VisitID>>>;
 
 pub struct VisitStats {
     visit_counter: u32,
     last_seen_time: ::time::Tm,
-    pub visits: VisitHolder,
-    pub host_visit_map: HostVisitMap,
-    pub path_visit_map: PathVisitMap,
+    visits: VisitHolder,
+    host_visit_map: HostVisitMap,
+    path_visit_map: PathVisitMap,
 }
 
 impl VisitStats {
@@ -40,19 +42,19 @@ impl VisitStats {
         VisitStats {
             visit_counter: 0,
             last_seen_time:  ::time::now(),
-            visits: HashMap::new(),
-            host_visit_map: HashMap::new(),
-            path_visit_map: HashMap::new(),
+            visits: hash_map::HashMap::new(),
+            host_visit_map: hash_map::HashMap::new(),
+            path_visit_map: hash_map::HashMap::new(),
         }
     }
 
     pub fn feed_hit(&mut self, hit: &Hit) {
         let key = &hit.host;
         let visitid: VisitID = match self.host_visit_map.entry(key.clone()) {
-            Entry::Occupied(e) => {
+            hash_map::Entry::Occupied(e) => {
                 *e.get()
             }
-            Entry::Vacant(e) => {
+            hash_map::Entry::Vacant(e) => {
                 self.visit_counter += 1;
                 let visitid = self.visit_counter;
                 let visit = Box::new(Visit {
@@ -76,11 +78,11 @@ impl VisitStats {
         self.last_seen_time = hit.time;
         let key = &hit.path;
         match self.path_visit_map.entry(key.clone()) {
-            Entry::Occupied(e) => {
+            hash_map::Entry::Occupied(e) => {
                 let visits: &mut Box<HashSet<u32>> = e.into_mut();
                 visits.insert(visitid);
             }
-            Entry::Vacant(e) => {
+            hash_map::Entry::Vacant(e) => {
                 let mut visits = Box::new(HashSet::new());
                 visits.insert(visitid);
                 e.insert(visits);
@@ -102,4 +104,29 @@ impl VisitStats {
         }
     }
 
+    pub fn visit_count(&self) -> usize {
+        self.visits.len()
+    }
+
+    pub fn iter_sorted_visits(&self) -> vec::IntoIter<&Box<Visit>> {
+        let mut sorted_visits: Vec<&Box<Visit>> = self.visits.values().collect();
+        sorted_visits.sort_by(
+            |a, b| match (&a.hit_count).cmp(&b.hit_count).reverse() {
+                Ordering::Equal => a.last_hit_time.to_timespec().cmp(&b.last_hit_time.to_timespec()).reverse(),
+                x => x,
+            }
+        );
+        sorted_visits.into_iter()
+    }
+
+    pub fn iter_sorted_path_chunks(&self) -> vec::IntoIter<(&str, usize)> {
+        let mut sorted_path_chunks: Vec<(&str, usize)> = self.path_visit_map.iter().map(
+            |(key, value)| (&key[..], value.len())
+        ).collect();
+        sorted_path_chunks.sort_by(
+            |a, b| a.1.cmp(&b.1).reverse()
+        );
+        sorted_path_chunks.into_iter()
+    }
 }
+

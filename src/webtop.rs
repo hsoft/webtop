@@ -10,7 +10,6 @@ use std::io::prelude::*;
 use std::io;
 use std::fs;
 use std::ffi::CString;
-use std::cmp::Ordering;
 use std::path::Path;
 use std::sync::mpsc::{Sender, Receiver};
 use std::sync::mpsc;
@@ -49,16 +48,9 @@ enum PathOrStdin<'a> {
     Stdin(&'a Receiver<String>),
 }
 
-fn output_host_mode(visits: &VisitHolder, screen: &mut Screen) {
-    let mut sorted_visits: Vec<&Box<Visit>> = visits.values().collect();
-    sorted_visits.sort_by(
-        |a, b| match (&a.hit_count).cmp(&b.hit_count).reverse() {
-            Ordering::Equal => a.last_hit_time.to_timespec().cmp(&b.last_hit_time.to_timespec()).reverse(),
-            x => x,
-        }
-    );
+fn output_host_mode(visit_stats: &VisitStats, screen: &mut Screen) {
     screen.erase();
-    for (index, visit) in sorted_visits.iter().take(screen.maxlines).enumerate() {
+    for (index, visit) in visit_stats.iter_sorted_visits().take(screen.maxlines).enumerate() {
         let first_time_fmt = strftime("%H:%M:%S", &visit.first_hit_time).unwrap();
         let last_time_fmt = strftime("%H:%M:%S", &visit.last_hit_time).unwrap();
         let visit_fmt = format!(
@@ -71,15 +63,9 @@ fn output_host_mode(visits: &VisitHolder, screen: &mut Screen) {
     screen.adjust_selection();
 }
 
-fn output_path_mode(path_visit_map: &PathVisitMap, screen: &mut Screen) {
-    let mut sorted_path_chunks: Vec<(&str, usize)> = path_visit_map.iter().map(
-        |(key, value)| (&key[..], value.len())
-    ).collect();
-    sorted_path_chunks.sort_by(
-        |a, b| a.1.cmp(&b.1).reverse()
-    );
+fn output_path_mode(visit_stats: &VisitStats, screen: &mut Screen) {
     screen.erase();
-    for (index, pair) in sorted_path_chunks.iter().take(screen.maxlines).enumerate() {
+    for (index, pair) in visit_stats.iter_sorted_path_chunks().take(screen.maxlines).enumerate() {
         let path = pair.0;
         let visit_count = pair.1;
         let path_fmt = format!(
@@ -148,8 +134,8 @@ fn refresh_visit_stats(inpath: PathOrStdin, wt: &mut WholeThing) {
     }
     wt.visit_stats.purge_visits();
     match wt.mode {
-        ProgramMode::URLPath => output_path_mode(&wt.visit_stats.path_visit_map, &mut wt.screen),
-        _ => output_host_mode(&wt.visit_stats.visits, &mut wt.screen),
+        ProgramMode::URLPath => output_path_mode(&wt.visit_stats, &mut wt.screen),
+        _ => output_host_mode(&wt.visit_stats, &mut wt.screen),
     };
     let mode_str = match wt.mode {
         ProgramMode::Host => "Host",
@@ -158,7 +144,7 @@ fn refresh_visit_stats(inpath: PathOrStdin, wt: &mut WholeThing) {
     };
     let msg = format!(
         "{} active visits. Last read: {} bytes. {} mode. Hit 'q' to quit, 'h/p/r' for the different modes",
-        wt.visit_stats.visits.len(), read_size, mode_str
+        wt.visit_stats.visit_count(), read_size, mode_str
     );
     mvprintw((wt.screen.maxlines+1) as i32, 0, &msg[..]);
     refresh();

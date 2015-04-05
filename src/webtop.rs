@@ -11,23 +11,23 @@ use std::io;
 use std::fs;
 use std::ffi::CString;
 use std::cmp::Ordering;
-use std::collections::hash_map::{HashMap, Entry};
+use std::collections::hash_map::{Entry};
 use std::collections::hash_set::HashSet;
 use std::path::Path;
 use std::sync::mpsc::{Sender, Receiver};
 use std::sync::mpsc;
 use std::thread;
-use time::{Tm, strftime, now, precise_time_s};
+use time::{Tm, strftime, precise_time_s};
 use ncurses::{
     mvprintw, refresh, initscr, getch, raw, keypad, nodelay, noecho, stdscr, getmaxy, endwin,
     newterm, set_term
 };
 use ncurses::ll;
-use types::Visit;
+use visits::*;
 use parse::parse_line;
 use screen::Screen;
 
-mod types;
+mod visits;
 mod parse;
 mod screen;
 
@@ -37,11 +37,6 @@ const PATH_KEY: i32 = 'p' as i32;
 const REFERER_KEY: i32 = 'r' as i32;
 const UP_KEY: i32 = 259;
 const DOWN_KEY: i32 = 258;
-
-type VisitID = usize;
-type VisitHolder = HashMap<VisitID, Box<Visit>>;
-type HostVisitMap = HashMap<String, VisitID>;
-type PathVisitMap = HashMap<String, Box<HashSet<VisitID>>>;
 
 #[derive(PartialEq, Copy, Clone)]
 enum ProgramMode {
@@ -57,7 +52,7 @@ enum PathOrStdin<'a> {
 }
 
 fn purge_visits(visits: &mut VisitHolder, host_visit_map: &mut HostVisitMap, last_seen_time: Tm) {
-    let mut toremove: Vec<usize> = Vec::new();
+    let mut toremove: Vec<u32> = Vec::new();
     let last_seen_ts = last_seen_time.to_timespec();
     for (visitid, visit) in visits.iter() {
         if last_seen_ts.sec - visit.last_hit_time.to_timespec().sec > 5 * 60 {
@@ -80,10 +75,12 @@ fn output_host_mode(visits: &VisitHolder, screen: &mut Screen) {
     );
     screen.erase();
     for (index, visit) in sorted_visits.iter().take(screen.maxlines).enumerate() {
-        let time_fmt = strftime("%H:%M:%S", &visit.last_hit_time).unwrap();
+        let first_time_fmt = strftime("%H:%M:%S", &visit.first_hit_time).unwrap();
+        let last_time_fmt = strftime("%H:%M:%S", &visit.last_hit_time).unwrap();
         let visit_fmt = format!(
-            "{:>4} | {:<15} | {} | {} | {}",
-            visit.hit_count, visit.host, time_fmt, visit.last_path, visit.referer
+            "{:>4} | {:<15} | {}-{} | {} | {}",
+            visit.hit_count, visit.host, first_time_fmt, last_time_fmt, visit.last_path,
+            visit.referer
         );
         screen.printline(index, &visit_fmt[..]);
     }
@@ -113,11 +110,7 @@ fn output_path_mode(path_visit_map: &PathVisitMap, screen: &mut Screen) {
 struct WholeThing {
     screen: Screen,
     last_size: i64,
-    last_seen_time: Tm,
-    visits: VisitHolder,
-    visit_counter: usize,
-    host_visit_map: HostVisitMap,
-    path_visit_map: PathVisitMap,
+    visit_stats: VisitStats,
     mode: ProgramMode,
 }
 
@@ -168,13 +161,13 @@ fn refresh_visit_stats(inpath: PathOrStdin, wt: &mut WholeThing) {
             None => continue
         };
         let key = &hit.host;
-        let visitid: VisitID = match wt.host_visit_map.entry(key.clone()) {
+        let visitid: VisitID = match wt.visit_stats.host_visit_map.entry(key.clone()) {
             Entry::Occupied(e) => {
                 *e.get()
             }
             Entry::Vacant(e) => {
-                wt.visit_counter += 1;
-                let visitid = wt.visit_counter;
+                wt.visit_stats.visit_counter += 1;
+                let visitid = wt.visit_stats.visit_counter;
                 let visit = Box::new(Visit {
                     host: hit.host.clone(),
                     hit_count: 0,
@@ -184,20 +177,20 @@ fn refresh_visit_stats(inpath: PathOrStdin, wt: &mut WholeThing) {
                     referer: hit.referer.clone(),
                     agent: hit.agent.clone(),
                 });
-                wt.visits.insert(visitid, visit);
+                wt.visit_stats.visits.insert(visitid, visit);
                 e.insert(visitid);
                 visitid
             }
         };
-        let visit: &mut Box<Visit> = wt.visits.get_mut(&visitid).unwrap();
+        let visit: &mut Box<Visit> = wt.visit_stats.visits.get_mut(&visitid).unwrap();
         visit.hit_count += 1;
         visit.last_hit_time = hit.time;
         visit.last_path = hit.path.clone();
-        wt.last_seen_time = hit.time;
+        wt.visit_stats.last_seen_time = hit.time;
         let key = &hit.path;
-        match wt.path_visit_map.entry(key.clone()) {
+        match wt.visit_stats.path_visit_map.entry(key.clone()) {
             Entry::Occupied(e) => {
-                let visits: &mut Box<HashSet<usize>> = e.into_mut();
+                let visits: &mut Box<HashSet<u32>> = e.into_mut();
                 visits.insert(visitid);
             }
             Entry::Vacant(e) => {
@@ -207,10 +200,10 @@ fn refresh_visit_stats(inpath: PathOrStdin, wt: &mut WholeThing) {
             }
         };
     }
-    purge_visits(&mut wt.visits, &mut wt.host_visit_map, wt.last_seen_time);
+    purge_visits(&mut wt.visit_stats.visits, &mut wt.visit_stats.host_visit_map, wt.visit_stats.last_seen_time);
     match wt.mode {
-        ProgramMode::URLPath => output_path_mode(&wt.path_visit_map, &mut wt.screen),
-        _ => output_host_mode(&wt.visits, &mut wt.screen),
+        ProgramMode::URLPath => output_path_mode(&wt.visit_stats.path_visit_map, &mut wt.screen),
+        _ => output_host_mode(&wt.visit_stats.visits, &mut wt.screen),
     };
     let mode_str = match wt.mode {
         ProgramMode::Host => "Host",
@@ -219,7 +212,7 @@ fn refresh_visit_stats(inpath: PathOrStdin, wt: &mut WholeThing) {
     };
     let msg = format!(
         "{} active visits. Last read: {} bytes. {} mode. Hit 'q' to quit, 'h/p/r' for the different modes",
-        wt.visits.len(), read_size, mode_str
+        wt.visit_stats.visits.len(), read_size, mode_str
     );
     mvprintw((wt.screen.maxlines+1) as i32, 0, &msg[..]);
     refresh();
@@ -230,11 +223,7 @@ fn mainloop(filepath: PathOrStdin, maxlines: usize) -> i32 {
     let mut wt = WholeThing {
         screen: Screen::new(maxlines),
         last_size: 0,
-        last_seen_time:  time::now(),
-        visits: HashMap::new(),
-        visit_counter: 0,
-        host_visit_map: HashMap::new(),
-        path_visit_map: HashMap::new(),
+        visit_stats: VisitStats::new(),
         mode: ProgramMode::Host,
     };
     loop {

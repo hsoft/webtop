@@ -1,6 +1,6 @@
 use std::str::FromStr;
 use time::{strptime, now};
-use types::Hit;
+use visits::Hit;
 
 pub fn parse_line(line: &str) -> Option<Hit> {
     let re = regex!(r#"(\d+\.\d+\.\d+\.\d+) - - \[(.+) \+\d{4}\] "\w+ ([^ ]+) [^ "]+" (\d+) \d+ "([^"]*)" "([^"]*)""#);

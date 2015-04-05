@@ -27,14 +27,15 @@ pub struct Visit {
 type VisitID = u32;
 type VisitHolder = hash_map::HashMap<VisitID, Box<Visit>>;
 type HostVisitMap = hash_map::HashMap<String, VisitID>;
-type PathVisitMap = hash_map::HashMap<String, Box<HashSet<VisitID>>>;
+type StringVisitMap = hash_map::HashMap<String, Box<HashSet<VisitID>>>;
 
 pub struct VisitStats {
     visit_counter: u32,
     last_seen_time: ::time::Tm,
     visits: VisitHolder,
     host_visit_map: HostVisitMap,
-    path_visit_map: PathVisitMap,
+    path_visit_map: StringVisitMap,
+    referer_visit_map: StringVisitMap,
 }
 
 impl VisitStats {
@@ -45,6 +46,7 @@ impl VisitStats {
             visits: hash_map::HashMap::new(),
             host_visit_map: hash_map::HashMap::new(),
             path_visit_map: hash_map::HashMap::new(),
+            referer_visit_map: hash_map::HashMap::new(),
         }
     }
 
@@ -79,7 +81,7 @@ impl VisitStats {
         let key = &hit.path;
         match self.path_visit_map.entry(key.clone()) {
             hash_map::Entry::Occupied(e) => {
-                let visits: &mut Box<HashSet<u32>> = e.into_mut();
+                let visits: &mut Box<HashSet<VisitID>> = e.into_mut();
                 visits.insert(visitid);
             }
             hash_map::Entry::Vacant(e) => {
@@ -88,6 +90,21 @@ impl VisitStats {
                 e.insert(visits);
             }
         };
+        // Referer counting only makes sense for the first hit of the visit
+        if visit.hit_count == 1 {
+            let key = &visit.referer;
+            match self.referer_visit_map.entry(key.clone()) {
+                hash_map::Entry::Occupied(e) => {
+                    let visits: &mut Box<HashSet<VisitID>> = e.into_mut();
+                    visits.insert(visitid);
+                }
+                hash_map::Entry::Vacant(e) => {
+                    let mut visits = Box::new(HashSet::new());
+                    visits.insert(visitid);
+                    e.insert(visits);
+                }
+            };
+        }
     }
 
     pub fn purge_visits(&mut self) {
@@ -119,14 +136,24 @@ impl VisitStats {
         sorted_visits.into_iter()
     }
 
-    pub fn iter_sorted_path_chunks(&self) -> vec::IntoIter<(&str, usize)> {
-        let mut sorted_path_chunks: Vec<(&str, usize)> = self.path_visit_map.iter().map(
-            |(key, value)| (&key[..], value.len())
+    pub fn iter_sorted_path_chunks(&self) -> vec::IntoIter<(&str, u32)> {
+        let mut sorted_path_chunks: Vec<(&str, u32)> = self.path_visit_map.iter().map(
+            |(key, value)| (&key[..], value.len() as u32)
         ).collect();
         sorted_path_chunks.sort_by(
             |a, b| a.1.cmp(&b.1).reverse()
         );
         sorted_path_chunks.into_iter()
+    }
+
+    pub fn iter_sorted_referer_chunks(&self) -> vec::IntoIter<(&str, u32)> {
+        let mut sorted_referer_chunks: Vec<(&str, u32)> = self.referer_visit_map.iter().map(
+            |(key, value)| (&key[..], value.len() as u32)
+        ).collect();
+        sorted_referer_chunks.sort_by(
+            |a, b| a.1.cmp(&b.1).reverse()
+        );
+        sorted_referer_chunks.into_iter()
     }
 }
 

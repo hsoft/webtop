@@ -48,136 +48,159 @@ enum PathOrStdin<'a> {
     Stdin(&'a Receiver<String>),
 }
 
-fn output_host_mode(visit_stats: &VisitStats, screen: &mut Screen) {
-    screen.erase();
-    for (index, visit) in visit_stats.iter_sorted_visits().take(screen.maxlines).enumerate() {
-        let first_time_fmt = strftime("%H:%M:%S", &visit.first_hit_time).unwrap();
-        let last_time_fmt = strftime("%H:%M:%S", &visit.last_hit_time).unwrap();
-        let visit_fmt = format!(
-            "{:>4} | {:<15} | {}-{} | {} | {}",
-            visit.hit_count, visit.host, first_time_fmt, last_time_fmt, visit.last_path,
-            visit.referer
-        );
-        screen.printline(index, &visit_fmt[..]);
-    }
-    screen.adjust_selection();
-}
-
-fn output_path_mode(visit_stats: &VisitStats, screen: &mut Screen) {
-    screen.erase();
-    for (index, pair) in visit_stats.iter_sorted_path_chunks().take(screen.maxlines).enumerate() {
-        let path = pair.0;
-        let visit_count = pair.1;
-        let path_fmt = format!(
-            "{:>4} | {}",
-            visit_count, path,
-        );
-        screen.printline(index, &path_fmt[..]);
-    }
-    screen.adjust_selection();
-}
-
-struct WholeThing {
+struct WholeThing<'a> {
+    inpath: PathOrStdin<'a>,
     screen: Screen,
     last_size: i64,
     visit_stats: VisitStats,
     mode: ProgramMode,
 }
 
-fn refresh_visit_stats(inpath: PathOrStdin, wt: &mut WholeThing) {
-    let contents = match inpath {
-        PathOrStdin::Path(filepath) => {
-            let fsize = fs::metadata(filepath).ok().expect("can't stat").len() as i64;
-            if fsize < wt.last_size {
-                let msg = "Something weird is happening with the target file, skipping this round.";
-                mvprintw((wt.screen.maxlines+1) as i32, 0, &msg[..]);
-                return;
-            }
-            let read_size: i64 = if wt.last_size > 0 { fsize - wt.last_size } else { 90000 };
-            wt.last_size = fsize;
-            let mut fp = match fs::File::open(filepath) {
-                Ok(fp) => fp,
-                Err(e) => {
-                    let msg = format!(
-                        "Had troube reading {}! Error: {}",
-                        filepath.display(), e,
-                    );
-                    mvprintw((wt.screen.maxlines+1) as i32, 0, &msg[..]);
-                    return;
-                },
-            };
-            let _ = fp.seek(io::SeekFrom::End(-read_size));
-            let mut res = String::new();
-            fp.read_to_string(&mut res).unwrap();
-            res
-        },
-        PathOrStdin::Stdin(rx) => {
-            let mut res = String::new();
-            loop {
-                match rx.try_recv() {
-                    Ok(msg) => {
-                        res.push_str(&msg[..]);
-                    },
-                    Err(_) => { break; }
-                }
-            }
-            res
-        },
-    };
-    let read_size = contents.len();
-    for line in contents.split('\n') {
-        let hit = match parse_line(line) {
-            Some(hit) => hit,
-            None => continue
-        };
-        wt.visit_stats.feed_hit(&hit);
+impl<'a> WholeThing<'a> {
+    fn new(inpath: PathOrStdin, maxlines: u32) -> WholeThing {
+        WholeThing {
+            inpath: inpath,
+            screen: Screen::new(maxlines),
+            last_size: 0,
+            visit_stats: VisitStats::new(),
+            mode: ProgramMode::Host,
+        }
     }
-    wt.visit_stats.purge_visits();
-    match wt.mode {
-        ProgramMode::URLPath => output_path_mode(&wt.visit_stats, &mut wt.screen),
-        _ => output_host_mode(&wt.visit_stats, &mut wt.screen),
-    };
-    let mode_str = match wt.mode {
-        ProgramMode::Host => "Host",
-        ProgramMode::URLPath => "Path",
-        ProgramMode::Referer => "Referer",
-    };
-    let msg = format!(
-        "{} active visits. Last read: {} bytes. {} mode. Hit 'q' to quit, 'h/p/r' for the different modes",
-        wt.visit_stats.visit_count(), read_size, mode_str
-    );
-    mvprintw((wt.screen.maxlines+1) as i32, 0, &msg[..]);
-    refresh();
-}
 
-fn mainloop(filepath: PathOrStdin, maxlines: usize) -> i32 {
-    let mut last_refresh_time: f64 = 0.0;
-    let mut wt = WholeThing {
-        screen: Screen::new(maxlines),
-        last_size: 0,
-        visit_stats: VisitStats::new(),
-        mode: ProgramMode::Host,
-    };
-    loop {
-        if precise_time_s() - last_refresh_time > 1.0 {
-            refresh_visit_stats(filepath, &mut wt);
-            last_refresh_time = precise_time_s();
-        }
-        thread::sleep_ms(50);
-        let input = getch();
-        if input >= 0 {
-            wt.mode = match input {
-                QUIT_KEY => return input,
-                PATH_KEY => ProgramMode::URLPath,
-                HOST_KEY => ProgramMode::Host,
-                REFERER_KEY => ProgramMode::Referer,
-                UP_KEY => { wt.screen.up(); wt.mode },
-                DOWN_KEY => { wt.screen.down(); wt.mode },
-                _ => wt.mode,
+    fn refresh_visit_stats(&mut self) {
+        let contents = match self.inpath {
+            PathOrStdin::Path(filepath) => {
+                let fsize = fs::metadata(filepath).ok().expect("can't stat").len() as i64;
+                if fsize < self.last_size {
+                    let msg = "Something weird is happening with the target file, skipping this round.";
+                    mvprintw((self.screen.maxlines+1) as i32, 0, &msg[..]);
+                    return;
+                }
+                let read_size: i64 = if self.last_size > 0 { fsize - self.last_size } else { 90000 };
+                self.last_size = fsize;
+                let mut fp = match fs::File::open(filepath) {
+                    Ok(fp) => fp,
+                    Err(e) => {
+                        let msg = format!(
+                            "Had troube reading {}! Error: {}",
+                            filepath.display(), e,
+                        );
+                        mvprintw((self.screen.maxlines+1) as i32, 0, &msg[..]);
+                        return;
+                    },
+                };
+                let _ = fp.seek(io::SeekFrom::End(-read_size));
+                let mut res = String::new();
+                fp.read_to_string(&mut res).unwrap();
+                res
+            },
+            PathOrStdin::Stdin(rx) => {
+                let mut res = String::new();
+                loop {
+                    match rx.try_recv() {
+                        Ok(msg) => {
+                            res.push_str(&msg[..]);
+                        },
+                        Err(_) => { break; }
+                    }
+                }
+                res
+            },
+        };
+        let read_size = contents.len();
+        for line in contents.split('\n') {
+            let hit = match parse_line(line) {
+                Some(hit) => hit,
+                None => continue
             };
-            last_refresh_time = 0.0;
+            self.visit_stats.feed_hit(&hit);
+        }
+        self.visit_stats.purge_visits();
+        match self.mode {
+            ProgramMode::URLPath => self.output_path_mode(),
+            ProgramMode::Referer => self.output_referer_mode(),
+            ProgramMode::Host => self.output_host_mode(),
+        };
+        let mode_str = match self.mode {
+            ProgramMode::Host => "Host",
+            ProgramMode::URLPath => "Path",
+            ProgramMode::Referer => "Referer",
+        };
+        let msg = format!(
+            "{} active visits. Last read: {} bytes. {} mode. Hit 'q' to quit, 'h/p/r' for the different modes",
+            self.visit_stats.visit_count(), read_size, mode_str
+        );
+        mvprintw((self.screen.maxlines+1) as i32, 0, &msg[..]);
+        refresh();
+    }
+
+    fn output_host_mode(&mut self) {
+        self.screen.erase();
+        for (index, visit) in self.visit_stats.iter_sorted_visits().take(self.screen.maxlines as usize).enumerate() {
+            let first_time_fmt = strftime("%H:%M:%S", &visit.first_hit_time).unwrap();
+            let last_time_fmt = strftime("%H:%M:%S", &visit.last_hit_time).unwrap();
+            let visit_fmt = format!(
+                "{:>4} | {:<15} | {}-{} | {} | {}",
+                visit.hit_count, visit.host, first_time_fmt, last_time_fmt, visit.last_path,
+                visit.referer
+            );
+            self.screen.printline(index as u32, &visit_fmt[..]);
+        }
+        self.screen.adjust_selection();
+    }
+
+    fn output_path_mode(&mut self) {
+        self.screen.erase();
+        for (index, pair) in self.visit_stats.iter_sorted_path_chunks().take(self.screen.maxlines as usize).enumerate() {
+            let path = pair.0;
+            let visit_count = pair.1;
+            let path_fmt = format!(
+                "{:>4} | {}",
+                visit_count, path,
+            );
+            self.screen.printline(index as u32, &path_fmt[..]);
+        }
+        self.screen.adjust_selection();
+    }
+
+    fn output_referer_mode(&mut self) {
+        self.screen.erase();
+        for (index, pair) in self.visit_stats.iter_sorted_referer_chunks().take(self.screen.maxlines as usize).enumerate() {
+            let referer = pair.0;
+            let visit_count = pair.1;
+            let referer_fmt = format!(
+                "{:>4} | {}",
+                visit_count, referer,
+            );
+            self.screen.printline(index as u32, &referer_fmt[..]);
+        }
+        self.screen.adjust_selection();
+    }
+
+    fn mainloop(&mut self) -> i32 {
+        let mut last_refresh_time: f64 = 0.0;
+        loop {
+            if precise_time_s() - last_refresh_time > 1.0 {
+                self.refresh_visit_stats();
+                last_refresh_time = precise_time_s();
+            }
+            thread::sleep_ms(50);
+            let input = getch();
+            if input >= 0 {
+                self.mode = match input {
+                    QUIT_KEY => return input,
+                    PATH_KEY => ProgramMode::URLPath,
+                    HOST_KEY => ProgramMode::Host,
+                    REFERER_KEY => ProgramMode::Referer,
+                    UP_KEY => { self.screen.up(); self.mode },
+                    DOWN_KEY => { self.screen.down(); self.mode },
+                    _ => self.mode,
+                };
+                last_refresh_time = 0.0;
+            }
         }
     }
+
 }
 
 fn main()
@@ -234,10 +257,11 @@ fn main()
     nodelay(stdscr, true);
     noecho();
 
-    let scry = getmaxy(stdscr) as usize;
+    let scry = getmaxy(stdscr) as u32;
     let maxlines = scry - 2;
 
-    let last_input = mainloop(path, maxlines);
+    let mut wt = WholeThing::new(path, maxlines);
+    let last_input = wt.mainloop();
 
     endwin();
     println!("Program ended with last input {}", last_input);

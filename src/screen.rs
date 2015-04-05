@@ -4,13 +4,13 @@ use ncurses::{
 };
 
 pub struct Screen {
-    pub maxlines: usize,
-    pub selected_index: usize,
-    maxindex: usize,
+    pub maxlines: u32,
+    pub selected_index: u32,
+    maxindex: u32,
 }
 
 impl Screen {
-    pub fn new(maxlines: usize) -> Screen {
+    pub fn new(maxlines: u32) -> Screen {
         Screen {
             maxlines: maxlines,
             selected_index: 0,
@@ -23,7 +23,7 @@ impl Screen {
         self.maxindex = 0;
     }
 
-    pub fn printline(&mut self, index: usize, msg: &str) {
+    pub fn printline(&mut self, index: u32, msg: &str) {
         if self.selected_index == index {
             attron(A_REVERSE());
         }

@@ -1,9 +1,6 @@
-#![feature(core)]
-#![feature(env)]
 #![feature(std_misc)]
-#![feature(old_io)]
-#![feature(old_path)]
 #![feature(libc)]
+#![feature(old_io)]
 #![feature(plugin)]
 #![plugin(regex_macros)]
 extern crate regex;
@@ -11,12 +8,14 @@ extern crate time;
 extern crate ncurses;
 extern crate libc;
 
+use std::io::prelude::*;
+use std::io;
+use std::fs;
 use std::ffi::CString;
-use std::old_io::File;
-use std::old_io::fs::PathExtensions;
 use std::cmp::Ordering;
 use std::collections::hash_map::{HashMap, Entry};
 use std::collections::hash_set::HashSet;
+use std::path::Path;
 use std::sync::mpsc::{Sender, Receiver};
 use std::sync::mpsc;
 use std::thread;
@@ -25,6 +24,7 @@ use ncurses::{
     mvprintw, refresh, initscr, getch, raw, keypad, nodelay, noecho, stdscr, getmaxy, endwin,
     newterm, set_term
 };
+use ncurses::ll;
 use types::Visit;
 use parse::parse_line;
 use screen::Screen;
@@ -45,15 +45,14 @@ type VisitHolder = HashMap<VisitID, Box<Visit>>;
 type HostVisitMap = HashMap<String, VisitID>;
 type PathVisitMap = HashMap<String, Box<HashSet<VisitID>>>;
 
-#[derive(PartialEq)]
-#[derive(Copy)]
+#[derive(PartialEq, Copy, Clone)]
 enum ProgramMode {
     Host,
     URLPath,
     Referer,
 }
 
-#[derive(Copy)]
+#[derive(Copy, Clone)]
 enum PathOrStdin<'a> {
     Path(&'a Path),
     Stdin(&'a Receiver<String>),
@@ -127,7 +126,7 @@ struct WholeThing {
 fn refresh_visit_stats(inpath: PathOrStdin, wt: &mut WholeThing) {
     let contents = match inpath {
         PathOrStdin::Path(filepath) => {
-            let fsize = filepath.stat().ok().expect("can't stat").size as i64;
+            let fsize = fs::metadata(filepath).ok().expect("can't stat").len() as i64;
             if fsize < wt.last_size {
                 let msg = "Something weird is happening with the target file, skipping this round.";
                 mvprintw((wt.screen.maxlines+1) as i32, 0, &msg[..]);
@@ -135,7 +134,7 @@ fn refresh_visit_stats(inpath: PathOrStdin, wt: &mut WholeThing) {
             }
             let read_size: i64 = if wt.last_size > 0 { fsize - wt.last_size } else { 90000 };
             wt.last_size = fsize;
-            let mut fp = match File::open(filepath) {
+            let mut fp = match fs::File::open(filepath) {
                 Ok(fp) => fp,
                 Err(e) => {
                     let msg = format!(
@@ -146,8 +145,10 @@ fn refresh_visit_stats(inpath: PathOrStdin, wt: &mut WholeThing) {
                     return;
                 },
             };
-            let _ = fp.seek(-read_size, ::std::old_io::SeekEnd);
-            fp.read_to_string().unwrap()
+            let _ = fp.seek(io::SeekFrom::End(-read_size));
+            let mut res = String::new();
+            fp.read_to_string(&mut res).unwrap();
+            res
         },
         PathOrStdin::Stdin(rx) => {
             let mut res = String::new();
@@ -276,7 +277,7 @@ fn main()
     let path = match inpath {
         "-" => {
             thread::spawn(move || {
-                let mut stdin = ::std::old_io::stdin();
+                let stdin = io::stdin();
                 for line in stdin.lock().lines() {
                     stdin_tx.send(line.unwrap()).unwrap();
                 }
@@ -285,7 +286,7 @@ fn main()
             PathOrStdin::Stdin(&stdin_rx)
         },
         _ => {
-            if !filepath.exists() {
+            if fs::metadata(filepath).is_err() {
                 println!("{} doesn't exist! aborting.", filepath.display());
                 return;
             }
@@ -297,11 +298,11 @@ fn main()
         let tty_fp = unsafe { libc::fopen(
             CString::new(&"/dev/tty"[..]).unwrap().as_ptr(),
             CString::new(&"r"[..]).unwrap().as_ptr(),
-        )};
+        ) as ll::FILE_p};
         let stdout_fp = unsafe { libc::fdopen(
             libc::STDOUT_FILENO,
             CString::new(&"w"[..]).unwrap().as_ptr(),
-        )};
+        ) as ll::FILE_p};
         let term = newterm(None, stdout_fp, tty_fp);
         set_term(term);
     }

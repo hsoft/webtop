@@ -18,7 +18,7 @@ use ncurses::{
 };
 use ncurses::ll;
 use visits::*;
-use parse::parse_line;
+use parse::Parser;
 use screen::Screen;
 
 mod visits;
@@ -47,6 +47,7 @@ enum PathOrStdin<'a> {
 
 struct WholeThing<'a> {
     inpath: PathOrStdin<'a>,
+    parser: Parser,
     screen: Screen,
     last_size: i64,
     visit_stats: VisitStats,
@@ -57,6 +58,7 @@ impl<'a> WholeThing<'a> {
     fn new(inpath: PathOrStdin, maxlines: u32) -> WholeThing {
         WholeThing {
             inpath: inpath,
+            parser: Parser::new(),
             screen: Screen::new(maxlines),
             last_size: 0,
             visit_stats: VisitStats::new(),
@@ -106,7 +108,7 @@ impl<'a> WholeThing<'a> {
         };
         let read_size = contents.len();
         for line in contents.split('\n') {
-            let hit = match parse_line(line) {
+            let hit = match self.parser.parse_line(line) {
                 Some(hit) => hit,
                 None => continue
             };

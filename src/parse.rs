@@ -1,9 +1,10 @@
 use std::str::FromStr;
 use time::{strptime, now};
+use regex::Regex;
 use visits::Hit;
 
 pub fn parse_line(line: &str) -> Option<Hit> {
-    let re = regex!(r#"(\d+\.\d+\.\d+\.\d+) - - \[(.+) \+\d{4}\] "\w+ ([^ ]+) [^ "]+" (\d+) \d+ "([^"]*)" "([^"]*)""#);
+    let re = Regex::new(r#"(\d+\.\d+\.\d+\.\d+) - - \[(.+) \+\d{4}\] "\w+ ([^ ]+) [^ "]+" (\d+) \d+ "([^"]*)" "([^"]*)""#).unwrap();
     let cap = match re.captures(line) {
         Some(cap) => cap,
         None => return None

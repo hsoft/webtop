@@ -136,8 +136,8 @@ impl<'a> WholeThing<'a> {
     fn output_host_mode(&mut self) {
         self.screen.erase();
         for (index, visit) in self.visit_stats.iter_sorted_visits().take(self.screen.maxlines as usize).enumerate() {
-            let first_time_fmt = strftime("%H:%M:%S", &visit.first_hit_time).unwrap();
-            let last_time_fmt = strftime("%H:%M:%S", &visit.last_hit_time).unwrap();
+            let first_time_fmt = strftime("%H:%M", &visit.first_hit_time).unwrap();
+            let last_time_fmt = strftime("%H:%M", &visit.last_hit_time).unwrap();
             let visit_fmt = format!(
                 "{:>4} | {:<15} | {}-{} | {} | {}",
                 visit.hit_count, visit.host, first_time_fmt, last_time_fmt, visit.last_path,

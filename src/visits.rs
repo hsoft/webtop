@@ -108,16 +108,34 @@ impl VisitStats {
     }
 
     pub fn purge_visits(&mut self) {
-        let mut toremove: Vec<u32> = Vec::new();
+        let mut toremove: Vec<VisitID> = Vec::new();
         let last_seen_ts = self.last_seen_time.to_timespec();
         for (visitid, visit) in self.visits.iter() {
             if last_seen_ts.sec - visit.last_hit_time.to_timespec().sec > 5 * 60 {
                 toremove.push(*visitid);
                 self.host_visit_map.remove(&visit.host);
+                let empty = {
+                    let mut referer_visits = self.referer_visit_map.get_mut(&visit.referer).unwrap();
+                    referer_visits.remove(visitid);
+                    referer_visits.is_empty()
+                };
+                if empty {
+                    self.referer_visit_map.remove(&visit.referer);
+                }
+                let mut affected_paths: Vec<String> = Vec::new();
+                for (path, visit_set) in self.path_visit_map.iter_mut() {
+                    visit_set.remove(visitid);
+                    if visit_set.is_empty() {
+                        affected_paths.push(path.clone());
+                    }
+                }
+                for path in affected_paths.into_iter() {
+                    self.path_visit_map.remove(&path);
+                }
             }
         }
-        for visitid in toremove.iter() {
-            self.visits.remove(visitid);
+        for visitid in toremove.into_iter() {
+            self.visits.remove(&visitid);
         }
     }
 

@@ -1,13 +1,26 @@
 # webtop: apachetop in Rust
 
-Move along, this is just me playing around with Rust. I was really *aching* to try it and I looked
-for something, anything. I though "well, why not yet another apachetop?".
+Webtop is a [Rust][rust] console program that reads a log file from a HTTP server and output live
+visit statistics (that is, visits having had at least a hit in the last 5 minutes). It repeatedly
+reads the log file to keep stats fresh.
 
 It's built on curses using [ncurses-rs][ncurses-rs]
 
+## Status
+
+Very early development. This project is mainly a sandbox for me to learn Rust in, but it's shaping
+along well. Want to learn Rust with me? Contributions welcome.
+
+## Features
+
+* Live stats: repeadly polls the target log file
+* Stats by Host, Path and Referer
+* Can read from STDIN *continuously* ([goaccess][goaccess] doesn't do that)
+* ncurses (console) interface
+
 ## Compiling
 
-To compile this, you need to be on Rust 0.13 nightly. You calso need Cargo.
+To compile this, you need Rust 1.0.0 beta with Cargo.
 
 Then, it's only a matter of:
 
@@ -41,6 +54,7 @@ Note that when you quit, because `STDIN` is still open, the process will not qui
 * `h` - Host mode
 * `p` - Path mode
 * `r` - Referer mode
+* `up/down` - Move selection up and down (selection doesn't do anything for now)
 
 ## Unsafe code
 
@@ -48,5 +62,16 @@ There's some usage of unsafe code in the program:
 
 * TTY fiddling with `libc::isatty()`, `libc::fdopen()` and `libc::fopen()`.
 
+## Alternatives
+
+On the top of my head:
+
+* apachetop ([many projects competing for the name](https://duckduckgo.com/?q=apachetop))
+* [goaccess][goaccess]
+* [wtop][wtop]
+
+[rust]: http://rust-lang.org/
 [ncurses-rs]: https://github.com/jeaye/ncurses-rs
+[goaccess]: http://goaccess.io/
+[wtop]: https://github.com/ClockworkNet/wtop
 

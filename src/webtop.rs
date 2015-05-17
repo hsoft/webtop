@@ -14,7 +14,7 @@ use std::thread;
 use time::{strftime, precise_time_s};
 use ncurses::{
     initscr, getch, raw, keypad, nodelay, noecho, stdscr, endwin, newterm, set_term, curs_set,
-    CURSOR_VISIBILITY
+    CURSOR_VISIBILITY, setlocale, LcCategory
 };
 use ncurses::ll;
 use visits::*;
@@ -206,6 +206,7 @@ impl<'a> WholeThing<'a> {
 
 fn main()
 {
+    setlocale(LcCategory::all, "en_US.UTF-8");
     let mut args = ::std::env::args();
     if args.len() < 2 {
         println!("You need to specify a file to watch.");

@@ -33,10 +33,10 @@ impl Screen {
             "h - Host mode",
             "p - Path mode",
             "r - Referer mode",
-            "up/down - Selection",
+            "↑/↓ - Selection",
             "q - Quit",
         ];
-        let width = 25;
+        let width = 20;
         let w = newwin(7, width, 1, self.scrx - width);
         for (index, text) in lines.iter().enumerate() {
             mvwprintw(w, (index+1) as i32, 1, text);

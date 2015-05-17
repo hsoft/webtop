@@ -13,8 +13,8 @@ use std::sync::mpsc;
 use std::thread;
 use time::{strftime, precise_time_s};
 use ncurses::{
-    mvprintw, refresh, initscr, getch, raw, keypad, nodelay, noecho, stdscr, getmaxy, endwin,
-    newterm, set_term
+    initscr, getch, raw, keypad, nodelay, noecho, stdscr, endwin, newterm, set_term, curs_set,
+    CURSOR_VISIBILITY
 };
 use ncurses::ll;
 use visits::*;
@@ -25,6 +25,7 @@ mod visits;
 mod parse;
 mod screen;
 
+const HELP_KEY: i32 = '?' as i32;
 const QUIT_KEY: i32 = 'q' as i32;
 const HOST_KEY: i32 = 'h' as i32;
 const PATH_KEY: i32 = 'p' as i32;
@@ -55,11 +56,11 @@ struct WholeThing<'a> {
 }
 
 impl<'a> WholeThing<'a> {
-    fn new(inpath: PathOrStdin, maxlines: u32) -> WholeThing {
+    fn new(inpath: PathOrStdin) -> WholeThing {
         WholeThing {
             inpath: inpath,
             parser: Parser::new(),
-            screen: Screen::new(maxlines),
+            screen: Screen::new(),
             last_size: 0,
             visit_stats: VisitStats::new(),
             mode: ProgramMode::Host,
@@ -72,7 +73,7 @@ impl<'a> WholeThing<'a> {
                 let fsize = fs::metadata(filepath).ok().expect("can't stat").len() as i64;
                 if fsize < self.last_size {
                     let msg = "Something weird is happening with the target file, skipping this round.";
-                    mvprintw((self.screen.maxlines+1) as i32, 0, &msg[..]);
+                    self.screen.printstatus(&msg[..]);
                     return;
                 }
                 let read_size: i64 = if self.last_size > 0 { fsize - self.last_size } else { 90000 };
@@ -84,7 +85,7 @@ impl<'a> WholeThing<'a> {
                             "Had troube reading {}! Error: {}",
                             filepath.display(), e,
                         );
-                        mvprintw((self.screen.maxlines+1) as i32, 0, &msg[..]);
+                        self.screen.printstatus(&msg[..]);
                         return;
                     },
                 };
@@ -126,11 +127,11 @@ impl<'a> WholeThing<'a> {
             ProgramMode::Referer => "Referer",
         };
         let msg = format!(
-            "{} active visits. Last read: {} bytes. {} mode. Hit 'q' to quit, 'h/p/r' for the different modes",
+            "{} active visits. Last read: {} bytes. {} mode. Hit '?' for help.",
             self.visit_stats.visit_count(), read_size, mode_str
         );
-        mvprintw((self.screen.maxlines+1) as i32, 0, &msg[..]);
-        refresh();
+        self.screen.printstatus(&msg[..]);
+        self.screen.refresh();
     }
 
     fn output_host_mode(&mut self) {
@@ -188,6 +189,7 @@ impl<'a> WholeThing<'a> {
             if input >= 0 {
                 self.mode = match input {
                     QUIT_KEY => return input,
+                    HELP_KEY => { self.screen.toggle_help(); self.mode },
                     PATH_KEY => ProgramMode::URLPath,
                     HOST_KEY => ProgramMode::Host,
                     REFERER_KEY => ProgramMode::Referer,
@@ -255,11 +257,9 @@ fn main()
     keypad(stdscr, true);
     nodelay(stdscr, true);
     noecho();
+    curs_set(CURSOR_VISIBILITY::CURSOR_INVISIBLE);
 
-    let scry = getmaxy(stdscr) as u32;
-    let maxlines = scry - 2;
-
-    let mut wt = WholeThing::new(path, maxlines);
+    let mut wt = WholeThing::new(path);
     let last_input = wt.mainloop();
 
     endwin();

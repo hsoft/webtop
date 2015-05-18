@@ -36,9 +36,25 @@ log file you want to watch. Example: `webtop www.access.log`.
 The program only reads the end of the target file. It works by repeatedly `stat`-ing the target
 file and read the size difference from the last stat.
 
-The program will then present you with a curses based interface showing you HTTP hits, grouped
-by Host, ordered by hit count. There's also the Path mode and the Referer mode which group hits
-differently.
+### Display
+
+The program will present you with a curses based interface showing you HTTP hits, grouped
+by Host, ordered by hit count. 
+
+A line will start with a `!` if the visit has something "special". For now, "special" means at
+least one 4xx or 5xx hit.
+
+There's also the Path mode and the Referer mode which group hits differently.
+
+### Details
+
+When you press `d`, it summons the Details panel, which shows more details about the currently
+selected item. For now, this only works in Host mode
+
+Because of the moving nature of the display, the details panel doesn't follow selection at each
+refresh. To update the panel, you have to press `d` again.
+
+`q` closes the panel.
 
 ### Piping STDIN
 
@@ -50,11 +66,7 @@ Note that when you quit, because `STDIN` is still open, the process will not qui
 
 ### Keybindings
 
-* `q` - quit
-* `h` - Host mode
-* `p` - Path mode
-* `r` - Referer mode
-* `up/down` - Move selection up and down (selection doesn't do anything for now)
+You can press `?` to get an in-program list of all available keybindings.
 
 ## Unsafe code
 

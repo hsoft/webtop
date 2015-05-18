@@ -54,7 +54,7 @@ Developer and user documentation.
 
 ## Compiling
 
-To compile this, you need Rust 1.0.0 beta with Cargo.
+To compile this, you need Rust 1.0 with Cargo.
 
 Then, it's only a matter of:
 

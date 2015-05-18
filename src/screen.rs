@@ -1,16 +1,18 @@
 use std::cmp::{min, max};
 use ncurses::{
-    stdscr, getmaxy, getmaxx, mvaddstr, mvprintw, box_, erase, refresh, 
-    wrefresh, newwin, mvwprintw,
+    stdscr, getmaxy, getmaxx, mvaddstr, mvprintw, erase, refresh,
     attron, attroff, A_REVERSE
 };
+use visits::Visit;
+use help_panel::HelpPanel;
+use visit_detail_panel::VisitDetailPanel;
 
 pub struct Screen {
     pub maxlines: u32,
     pub selected_index: u32,
     maxindex: u32,
-    scrx: i32,
-    show_help: bool,
+    help_panel: HelpPanel,
+    visit_detail_panel: VisitDetailPanel,
 }
 
 impl Screen {
@@ -23,26 +25,9 @@ impl Screen {
             maxlines: maxlines,
             selected_index: 0,
             maxindex: 0,
-            scrx: scrx,
-            show_help: false,
+            help_panel: HelpPanel::new(scrx),
+            visit_detail_panel: VisitDetailPanel::new(scry, scrx),
         }
-    }
-
-    fn show_help_window(&self) {
-        let lines = [
-            "h - Host mode",
-            "p - Path mode",
-            "r - Referer mode",
-            "↑/↓ - Selection",
-            "q - Quit",
-        ];
-        let width = 20;
-        let w = newwin(7, width, 1, self.scrx - width);
-        for (index, text) in lines.iter().enumerate() {
-            mvwprintw(w, (index+1) as i32, 1, text);
-        }
-        box_(w, 0, 0);
-        wrefresh(w);
     }
 
     /* Public */
@@ -51,11 +36,25 @@ impl Screen {
         self.maxindex = 0;
     }
 
+    /* Returns whether there was something to close */
+    pub fn close_top_dialog(&mut self) -> bool {
+        if self.help_panel.is_visible() {
+            self.help_panel.toggle();
+            true
+        }
+        else if self.visit_detail_panel.is_visible() {
+            self.visit_detail_panel.close();
+            true
+        }
+        else {
+            false
+        }
+    }
+
     pub fn refresh(&self) {
         refresh();
-        if self.show_help {
-            self.show_help_window();
-        }
+        self.visit_detail_panel.refresh();
+        self.help_panel.refresh();
     }
 
     pub fn printline(&mut self, index: u32, msg: &str) {
@@ -88,8 +87,12 @@ impl Screen {
     }
 
     pub fn toggle_help(&mut self) {
-        self.show_help = !self.show_help;
+        self.help_panel.toggle();
         self.refresh();
+    }
+
+    pub fn show_visit_details(&mut self, visit: &Visit) {
+        self.visit_detail_panel.set_visit(visit)
     }
 }
 

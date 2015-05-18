@@ -24,12 +24,15 @@ use screen::Screen;
 mod visits;
 mod parse;
 mod screen;
+mod help_panel;
+mod visit_detail_panel;
 
 const HELP_KEY: i32 = '?' as i32;
 const QUIT_KEY: i32 = 'q' as i32;
 const HOST_KEY: i32 = 'h' as i32;
 const PATH_KEY: i32 = 'p' as i32;
 const REFERER_KEY: i32 = 'r' as i32;
+const DETAIL_KEY: i32 = 'd' as i32;
 const UP_KEY: i32 = 259;
 const DOWN_KEY: i32 = 258;
 
@@ -52,6 +55,7 @@ struct WholeThing<'a> {
     screen: Screen,
     last_size: i64,
     visit_stats: VisitStats,
+    selected_visitid: VisitID,
     mode: ProgramMode,
 }
 
@@ -63,6 +67,7 @@ impl<'a> WholeThing<'a> {
             screen: Screen::new(),
             last_size: 0,
             visit_stats: VisitStats::new(),
+            selected_visitid: 0,
             mode: ProgramMode::Host,
         }
     }
@@ -145,6 +150,9 @@ impl<'a> WholeThing<'a> {
                 visit.referer
             );
             self.screen.printline(index as u32, &visit_fmt[..]);
+            if (index as u32) == self.screen.selected_index {
+                self.selected_visitid = visit.id;
+            }
         }
         self.screen.adjust_selection();
     }
@@ -177,6 +185,14 @@ impl<'a> WholeThing<'a> {
         self.screen.adjust_selection();
     }
 
+    fn show_selected_visit(&mut self) {
+        let visit = self.visit_stats.get_visit_by_id(self.selected_visitid);
+        match visit {
+            Some(visit) => self.screen.show_visit_details(visit),
+            None => (),
+        };
+    }
+
     fn mainloop(&mut self) -> i32 {
         let mut last_refresh_time: f64 = 0.0;
         loop {
@@ -188,13 +204,16 @@ impl<'a> WholeThing<'a> {
             let input = getch();
             if input >= 0 {
                 self.mode = match input {
-                    QUIT_KEY => return input,
-                    HELP_KEY => { self.screen.toggle_help(); self.mode },
+                    QUIT_KEY => {
+                        if !self.screen.close_top_dialog() { return input} else { self.mode }
+                    },
                     PATH_KEY => ProgramMode::URLPath,
                     HOST_KEY => ProgramMode::Host,
                     REFERER_KEY => ProgramMode::Referer,
                     UP_KEY => { self.screen.up(); self.mode },
                     DOWN_KEY => { self.screen.down(); self.mode },
+                    HELP_KEY => { self.screen.toggle_help(); self.mode },
+                    DETAIL_KEY => { self.show_selected_visit(); self.mode },
                     _ => self.mode,
                 };
                 last_refresh_time = 0.0;

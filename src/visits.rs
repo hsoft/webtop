@@ -13,8 +13,11 @@ pub struct Hit {
     pub agent: String,
 }
 
+pub type VisitID = u32;
+
 #[derive(Clone)]
 pub struct Visit {
+    pub id: VisitID,
     pub host: String,
     pub hit_count: u32,
     pub first_hit_time: ::time::Tm,
@@ -24,7 +27,6 @@ pub struct Visit {
     pub agent: String,
 }
 
-type VisitID = u32;
 type VisitHolder = hash_map::HashMap<VisitID, Box<Visit>>;
 type HostVisitMap = hash_map::HashMap<String, VisitID>;
 type StringVisitMap = hash_map::HashMap<String, Box<HashSet<VisitID>>>;
@@ -60,6 +62,7 @@ impl VisitStats {
                 self.visit_counter += 1;
                 let visitid = self.visit_counter;
                 let visit = Box::new(Visit {
+                    id: visitid,
                     host: hit.host.clone(),
                     hit_count: 0,
                     first_hit_time: hit.time,
@@ -136,6 +139,13 @@ impl VisitStats {
         }
         for visitid in toremove.into_iter() {
             self.visits.remove(&visitid);
+        }
+    }
+
+    pub fn get_visit_by_id(&self, visitid: VisitID) -> Option<&Visit> {
+        match self.visits.get(&visitid) {
+            Some(ref visit) => Some(&visit),
+            None => None,
         }
     }
 

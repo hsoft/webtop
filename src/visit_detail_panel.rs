@@ -40,6 +40,8 @@ impl VisitDetailPanel {
                     &visit.host[..],
                     &visit.fmt_time_range()[..],
                     &format!("Hits: {}", visit.hit_count)[..],
+                    &format!("4xx: {}", visit.hit_4xx_count)[..],
+                    &format!("5xx: {}", visit.hit_5xx_count)[..],
                     &visit.referer[..],
                     &visit.agent[..],
                 ];

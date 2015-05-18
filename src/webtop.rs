@@ -142,9 +142,11 @@ impl<'a> WholeThing<'a> {
     fn output_host_mode(&mut self) {
         self.screen.erase();
         for (index, visit) in self.visit_stats.iter_sorted_visits().take(self.screen.maxlines as usize).enumerate() {
+            let problem_marker = if visit.has_problems() { "!" } else { " " };
             let visit_fmt = format!(
-                "{:>4} | {:<15} | {} | {} | {}",
-                visit.hit_count, visit.host, visit.fmt_time_range(), visit.last_path, visit.referer
+                "{}{:>4} | {:<15} | {} | {} | {}",
+                problem_marker, visit.hit_count, visit.host, visit.fmt_time_range(),
+                visit.last_path, visit.referer
             );
             self.screen.printline(index as u32, &visit_fmt[..]);
             if (index as u32) == self.screen.selected_index {

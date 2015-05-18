@@ -14,6 +14,16 @@ pub struct Hit {
     pub agent: String,
 }
 
+impl Hit {
+    pub fn is_4xx(&self) -> bool {
+        self.status >= 400 && self.status < 500
+    }
+
+    pub fn is_5xx(&self) -> bool {
+        self.status >= 400 && self.status < 500
+    }
+}
+
 pub type VisitID = u32;
 
 #[derive(Clone)]
@@ -21,6 +31,8 @@ pub struct Visit {
     pub id: VisitID,
     pub host: String,
     pub hit_count: u32,
+    pub hit_4xx_count: u32,
+    pub hit_5xx_count: u32,
     pub first_hit_time: ::time::Tm,
     pub last_hit_time: ::time::Tm,
     pub last_path: String,
@@ -29,10 +41,41 @@ pub struct Visit {
 }
 
 impl Visit {
+    pub fn new(visitid: VisitID, hit: &Hit) -> Visit {
+        Visit {
+            id: visitid,
+            host: hit.host.clone(),
+            hit_count: 0,
+            hit_4xx_count: 0,
+            hit_5xx_count: 0,
+            first_hit_time: hit.time,
+            last_hit_time: hit.time,
+            last_path: hit.path.clone(),
+            referer: hit.referer.clone(),
+            agent: hit.agent.clone(),
+        }
+    }
+
+    pub fn has_problems(&self) -> bool {
+        self.hit_4xx_count > 0 || self.hit_5xx_count > 0
+    }
+
     pub fn fmt_time_range(&self) -> String {
         let first_time_fmt = strftime("%H:%M", &self.first_hit_time).unwrap();
         let last_time_fmt = strftime("%H:%M", &self.last_hit_time).unwrap();
         format!("{}-{}", first_time_fmt, last_time_fmt)
+    }
+
+    pub fn feed_hit(&mut self, hit: &Hit) {
+        self.hit_count += 1;
+        if hit.is_4xx() {
+            self.hit_4xx_count += 1;
+        }
+        else if hit.is_5xx() {
+            self.hit_5xx_count += 1;
+        }
+        self.last_hit_time = hit.time;
+        self.last_path = hit.path.clone();
     }
 }
 
@@ -70,25 +113,14 @@ impl VisitStats {
             hash_map::Entry::Vacant(e) => {
                 self.visit_counter += 1;
                 let visitid = self.visit_counter;
-                let visit = Box::new(Visit {
-                    id: visitid,
-                    host: hit.host.clone(),
-                    hit_count: 0,
-                    first_hit_time: hit.time,
-                    last_hit_time: hit.time,
-                    last_path: hit.path.clone(),
-                    referer: hit.referer.clone(),
-                    agent: hit.agent.clone(),
-                });
+                let visit = Box::new(Visit::new(visitid, hit));
                 self.visits.insert(visitid, visit);
                 e.insert(visitid);
                 visitid
             }
         };
         let visit: &mut Box<Visit> = self.visits.get_mut(&visitid).unwrap();
-        visit.hit_count += 1;
-        visit.last_hit_time = hit.time;
-        visit.last_path = hit.path.clone();
+        visit.feed_hit(hit);
         self.last_seen_time = hit.time;
         let key = &hit.path;
         match self.path_visit_map.entry(key.clone()) {

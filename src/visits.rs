@@ -143,8 +143,10 @@ impl VisitStats {
         self.visits.len()
     }
 
-    pub fn iter_sorted_visits(&self) -> vec::IntoIter<&Box<Visit>> {
-        let mut sorted_visits: Vec<&Box<Visit>> = self.visits.values().collect();
+    pub fn iter_sorted_visits(&self) -> vec::IntoIter<&Visit> {
+        let mut sorted_visits: Vec<&Visit> = self.visits.values()
+            .map(|v| &(**v)) // &Box<Visit> --> &Visit
+            .collect();
         sorted_visits.sort_by(
             |a, b| match (&a.hit_count).cmp(&b.hit_count).reverse() {
                 Ordering::Equal => a.last_hit_time.to_timespec().cmp(&b.last_hit_time.to_timespec()).reverse(),

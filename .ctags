@@ -1,0 +1,3 @@
+--recurse
+--exclude=.git
+--options=ctags.rust

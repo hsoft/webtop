@@ -6,17 +6,51 @@ reads the log file to keep stats fresh.
 
 It's built on curses using [ncurses-rs][ncurses-rs]
 
-## Status
-
-Very early development. This project is mainly a sandbox for me to learn Rust in, but it's shaping
-along well. Want to learn Rust with me? Contributions welcome.
-
 ## Features
 
 * Live stats: repeadly polls the target log file
 * Stats by Host, Path and Referer
-* Can read from STDIN *continuously* ([goaccess][goaccess] doesn't do that)
+* Drill down single visit stats
+* Can read from STDIN *continuously* ([goaccess][goaccess] doesn't do that) so you can `tail -f`
+  from a Docker container and pipe this in `webtop`.
 * ncurses (console) interface
+
+## Status & Roadmap
+
+Early development. This project is mainly a sandbox for me to learn Rust in, but it's shaping
+along well. Because of this, I think I'll aim for shaping this into an actual program.
+
+Want to learn Rust with me? Contributions welcome.
+
+Things I want to do before 1.0 are:
+
+### Multiple log files support
+
+When using multiple log files, we would get merged visits stats, so a host visiting `site1` would
+be the same as the host visiting `site2`, but we'd also have specific stats subsites. For example,
+`/some/path` in `site1z wouldn't be considered as the same as `/some/path` in `site2`.
+
+This is something that other similar apps like goaccess lack but that I'd find useful.
+
+### Full drill-down
+
+Make each base table "drill-down"-able, with navigable subtables which can also be drilled down,
+up to our atomic structure, the visit.
+
+### More log formats
+
+For now, there's support for only one log format. We need more.
+
+### Better stats
+
+* Bandwidth stats
+* Resource types filtering (ignore image, CSS and JS hits)
+* Better usage of screen estate for tables
+* Alternative sort criteria
+
+### Documentation
+
+Developer and user documentation.
 
 ## Compiling
 

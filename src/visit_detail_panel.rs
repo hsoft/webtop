@@ -1,5 +1,5 @@
 use visits::Visit;
-use ncurses::{newwin, box_, mvwprintw, wrefresh};
+use ncurses::{newwin, box_, mvwinsnstr, wrefresh};
 
 pub struct VisitDetailPanel {
     scry: i32,
@@ -34,11 +34,20 @@ impl VisitDetailPanel {
     pub fn refresh(&self) {
         match self.visit {
             Some(ref visit) => {
-                let width = 30;
+                let width = self.scrx / 2;
                 let height = self.scry - 1;
+                let lines = [
+                    &visit.host[..],
+                    &visit.fmt_time_range()[..],
+                    &format!("Hits: {}", visit.hit_count)[..],
+                    &visit.referer[..],
+                    &visit.agent[..],
+                ];
                 let w = newwin(height, width, 0, self.scrx - width);
+                for (index, text) in lines.iter().enumerate() {
+                    mvwinsnstr(w, (index+1) as i32, 1, text, width-2);
+                }
                 box_(w, 0, 0);
-                mvwprintw(w, 1, 1, &visit.host[..]);
                 wrefresh(w);
             },
             None => return,

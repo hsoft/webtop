@@ -2,6 +2,7 @@ use std::cmp::Ordering;
 use std::collections::hash_map;
 use std::collections::hash_set::HashSet;
 use std::vec;
+use time::strftime;
 
 #[derive(Clone)]
 pub struct Hit {
@@ -25,6 +26,14 @@ pub struct Visit {
     pub last_path: String,
     pub referer: String,
     pub agent: String,
+}
+
+impl Visit {
+    pub fn fmt_time_range(&self) -> String {
+        let first_time_fmt = strftime("%H:%M", &self.first_hit_time).unwrap();
+        let last_time_fmt = strftime("%H:%M", &self.last_hit_time).unwrap();
+        format!("{}-{}", first_time_fmt, last_time_fmt)
+    }
 }
 
 type VisitHolder = hash_map::HashMap<VisitID, Box<Visit>>;

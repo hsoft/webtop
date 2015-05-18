@@ -11,7 +11,7 @@ use std::path::Path;
 use std::sync::mpsc::{Sender, Receiver};
 use std::sync::mpsc;
 use std::thread;
-use time::{strftime, precise_time_s};
+use time::precise_time_s;
 use ncurses::{
     initscr, getch, raw, keypad, nodelay, noecho, stdscr, endwin, newterm, set_term, curs_set,
     CURSOR_VISIBILITY, setlocale, LcCategory
@@ -142,12 +142,9 @@ impl<'a> WholeThing<'a> {
     fn output_host_mode(&mut self) {
         self.screen.erase();
         for (index, visit) in self.visit_stats.iter_sorted_visits().take(self.screen.maxlines as usize).enumerate() {
-            let first_time_fmt = strftime("%H:%M", &visit.first_hit_time).unwrap();
-            let last_time_fmt = strftime("%H:%M", &visit.last_hit_time).unwrap();
             let visit_fmt = format!(
-                "{:>4} | {:<15} | {}-{} | {} | {}",
-                visit.hit_count, visit.host, first_time_fmt, last_time_fmt, visit.last_path,
-                visit.referer
+                "{:>4} | {:<15} | {} | {} | {}",
+                visit.hit_count, visit.host, visit.fmt_time_range(), visit.last_path, visit.referer
             );
             self.screen.printline(index as u32, &visit_fmt[..]);
             if (index as u32) == self.screen.selected_index {

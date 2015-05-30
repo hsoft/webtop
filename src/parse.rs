@@ -1,7 +1,7 @@
 use std::str::FromStr;
 use time::{strptime, now};
 use regex::Regex;
-use visits::Hit;
+use hit::Hit;
 
 pub struct Parser {
     re_main: Regex,

@@ -21,6 +21,7 @@ use visits::*;
 use parse::Parser;
 use screen::Screen;
 
+mod hit;
 mod visits;
 mod parse;
 mod screen;

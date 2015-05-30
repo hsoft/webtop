@@ -12,7 +12,7 @@ impl Parser {
     pub fn new() -> Parser {
         Parser {
             re_main: Regex::new(
-                r#"(\d+\.\d+\.\d+\.\d+) - - \[(.+) \+\d{4}\] "\w+ ([^ ]+) [^ "]+" (\d+) \d+ "([^"]*)" "([^"]*)""#
+                r#"(\d+\.\d+\.\d+\.\d+) - - \[(.+) \+\d{4}\] "\w+ ([^ ]+) [^ "]+" (\d+) (\d+) "([^"]*)" "([^"]*)""#
             ).unwrap(),
             // Clean the part after the "?"
             re_path: Regex::new(
@@ -28,7 +28,7 @@ impl Parser {
         };
         let path = cap.at(3).unwrap();
         let cleaned_path = self.re_path.captures(path).unwrap().at(1).unwrap();
-        let referer = cap.at(5).unwrap();
+        let referer = cap.at(6).unwrap();
         let cleaned_referer = self.re_path.captures(referer).unwrap().at(1).unwrap();
         Some(Hit {
             host: cap.at(1).unwrap().to_string(),
@@ -40,9 +40,13 @@ impl Parser {
                 Ok(i) => i,
                 Err(_) => 999
             },
+            bytes: match FromStr::from_str(cap.at(5).unwrap()) {
+                Ok(i) => i,
+                Err(_) => 0
+            },
             path: cleaned_path.to_string(),
             referer: cleaned_referer.to_string(),
-            agent: cap.at(6).unwrap().to_string(),
+            agent: cap.at(7).unwrap().to_string(),
         })
     }
 }

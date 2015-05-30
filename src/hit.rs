@@ -7,6 +7,7 @@ pub struct Hit {
     pub host: String,
     pub time: ::time::Tm,
     pub status: u32,
+    pub bytes: u32,
     pub path: String,
     pub referer: String,
     pub agent: String,

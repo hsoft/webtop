@@ -2,6 +2,7 @@ extern crate regex;
 extern crate time;
 extern crate ncurses;
 extern crate libc;
+extern crate number_prefix;
 
 use std::io::prelude::*;
 use std::io;
@@ -145,9 +146,9 @@ impl<'a> WholeThing<'a> {
         for (index, visit) in self.visit_stats.iter_sorted_visits().take(self.screen.maxlines() as usize).enumerate() {
             let problem_marker = if visit.has_problems() { "!" } else { " " };
             let visit_fmt = format!(
-                "{}{:>4} | {:<15} | {} | {} | {}",
+                "{}{:>4} | {:<15} | {} | {:<6} | {} | {}",
                 problem_marker, visit.hit_count, visit.host, visit.fmt_time_range(),
-                visit.last_path, visit.referer
+                visit.fmt_bytes(), visit.last_path, visit.referer
             );
             self.screen.printline(index as u32, &visit_fmt[..]);
             if (index as u32) == self.screen.selected_index {

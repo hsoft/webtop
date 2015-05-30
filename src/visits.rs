@@ -3,6 +3,7 @@ use std::collections::hash_map;
 use std::collections::hash_set::HashSet;
 use std::vec;
 use time::strftime;
+use number_prefix::{binary_prefix, Standalone, Prefixed};
 use hit::{Hit, is_path_resource};
 
 pub type VisitID = u32;
@@ -14,6 +15,7 @@ pub struct Visit {
     pub hit_count: u32,
     pub hit_4xx_count: u32,
     pub hit_5xx_count: u32,
+    pub bytes: u32,
     pub first_hit_time: ::time::Tm,
     pub last_hit_time: ::time::Tm,
     pub last_path: String,
@@ -30,6 +32,7 @@ impl Visit {
             hit_count: 0,
             hit_4xx_count: 0,
             hit_5xx_count: 0,
+            bytes: 0,
             first_hit_time: hit.time,
             last_hit_time: hit.time,
             last_path: hit.path.clone(),
@@ -49,6 +52,13 @@ impl Visit {
         format!("{}-{}", first_time_fmt, last_time_fmt)
     }
 
+    pub fn fmt_bytes(&self) -> String {
+        match binary_prefix(self.bytes as f32) {
+            Standalone(bytes) => format!("{:>3}B", bytes),
+            Prefixed(prefix, n) => format!("{:>3.0}{}B", n, prefix),
+        }
+    }
+
     pub fn feed_hit(&mut self, hit: &Hit) {
         self.hit_count += 1;
         if hit.is_4xx() {
@@ -57,6 +67,7 @@ impl Visit {
         else if hit.is_5xx() {
             self.hit_5xx_count += 1;
         }
+        self.bytes += hit.bytes;
         self.last_hit_time = hit.time;
         /* We only want to display non-resource paths, except when our first path was already
          * considered a resource. In this case, we display all paths until we get a non-resource

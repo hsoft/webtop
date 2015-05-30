@@ -11,6 +11,8 @@ It's built on curses using [ncurses-rs][ncurses-rs]
 * Live stats: repeadly polls the target log file
 * Stats by Host, Path and Referer
 * Drill down single visit stats
+* Bandwidth stats
+* Resource types filtering (ignore image, CSS and JS hits)
 * Can read from STDIN *continuously* ([goaccess][goaccess] doesn't do that) so you can `tail -f`
   from a Docker container and pipe this in `webtop`.
 * ncurses (console) interface
@@ -43,8 +45,6 @@ For now, there's support for only one log format. We need more.
 
 ### Better stats
 
-* Bandwidth stats
-* Resource types filtering (ignore image, CSS and JS hits)
 * Better usage of screen estate for tables
 * Alternative sort criteria
 

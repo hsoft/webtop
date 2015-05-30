@@ -13,4 +13,5 @@ libc = "0.1"
 time = "0.1"
 regex = "0.1"
 ncurses = "5"
+number_prefix = "0.2"
 

@@ -22,6 +22,11 @@ impl Hit {
     pub fn is_5xx(&self) -> bool {
         self.status >= 400 && self.status < 500
     }
+
+    pub fn fmt_time(&self) -> String {
+        strftime("%H:%M", &self.time).unwrap()
+    }
+
 }
 
 pub type VisitID = u32;
@@ -38,6 +43,7 @@ pub struct Visit {
     pub last_path: String,
     pub referer: String,
     pub agent: String,
+    pub hits: Vec<Box<Hit>>,
 }
 
 impl Visit {
@@ -53,6 +59,7 @@ impl Visit {
             last_path: hit.path.clone(),
             referer: hit.referer.clone(),
             agent: hit.agent.clone(),
+            hits: Vec::new(),
         }
     }
 
@@ -76,6 +83,7 @@ impl Visit {
         }
         self.last_hit_time = hit.time;
         self.last_path = hit.path.clone();
+        self.hits.push(Box::new(hit.clone()));
     }
 }
 

@@ -3,7 +3,7 @@ use std::collections::hash_map;
 use std::collections::hash_set::HashSet;
 use std::vec;
 use time::strftime;
-use hit::Hit;
+use hit::{Hit, is_path_resource};
 
 pub type VisitID = u32;
 
@@ -58,7 +58,13 @@ impl Visit {
             self.hit_5xx_count += 1;
         }
         self.last_hit_time = hit.time;
-        self.last_path = hit.path.clone();
+        /* We only want to display non-resource paths, except when our first path was already
+         * considered a resource. In this case, we display all paths until we get a non-resource
+         * one.
+         */
+        if (!hit.is_resource()) || is_path_resource(&self.last_path) {
+            self.last_path = hit.path.clone();
+        }
         self.hits.push(Box::new(hit.clone()));
     }
 }

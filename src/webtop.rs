@@ -141,7 +141,7 @@ impl<'a> WholeThing<'a> {
 
     fn output_host_mode(&mut self) {
         self.screen.erase();
-        for (index, visit) in self.visit_stats.iter_sorted_visits().take(self.screen.maxlines as usize).enumerate() {
+        for (index, visit) in self.visit_stats.iter_sorted_visits().take(self.screen.maxlines() as usize).enumerate() {
             let problem_marker = if visit.has_problems() { "!" } else { " " };
             let visit_fmt = format!(
                 "{}{:>4} | {:<15} | {} | {} | {}",
@@ -158,7 +158,7 @@ impl<'a> WholeThing<'a> {
 
     fn output_path_mode(&mut self) {
         self.screen.erase();
-        for (index, pair) in self.visit_stats.iter_sorted_path_chunks().take(self.screen.maxlines as usize).enumerate() {
+        for (index, pair) in self.visit_stats.iter_sorted_path_chunks().take(self.screen.maxlines() as usize).enumerate() {
             let path = pair.0;
             let visit_count = pair.1;
             let path_fmt = format!(
@@ -172,7 +172,7 @@ impl<'a> WholeThing<'a> {
 
     fn output_referer_mode(&mut self) {
         self.screen.erase();
-        for (index, pair) in self.visit_stats.iter_sorted_referer_chunks().take(self.screen.maxlines as usize).enumerate() {
+        for (index, pair) in self.visit_stats.iter_sorted_referer_chunks().take(self.screen.maxlines() as usize).enumerate() {
             let referer = pair.0;
             let visit_count = pair.1;
             let referer_fmt = format!(

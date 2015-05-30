@@ -1,6 +1,6 @@
 use std::cmp::{min, max};
 use ncurses::{
-    stdscr, getmaxy, getmaxx, mvaddstr, mvprintw, erase, refresh,
+    stdscr, getmaxy, getmaxx, mvprintw, erase, refresh, mvaddnstr,
     attron, attroff, A_REVERSE
 };
 use visits::Visit;
@@ -8,7 +8,8 @@ use help_panel::HelpPanel;
 use visit_detail_panel::VisitDetailPanel;
 
 pub struct Screen {
-    pub maxlines: u32,
+    scrx: u32,
+    scry: u32,
     pub selected_index: u32,
     maxindex: u32,
     help_panel: HelpPanel,
@@ -19,10 +20,10 @@ impl Screen {
     pub fn new() -> Screen {
         let scry = getmaxy(stdscr);
         let scrx = getmaxx(stdscr);
-        let maxlines = (scry - 2) as u32;
 
         Screen {
-            maxlines: maxlines,
+            scrx: scrx as u32,
+            scry: scry as u32,
             selected_index: 0,
             maxindex: 0,
             help_panel: HelpPanel::new(scrx),
@@ -31,6 +32,10 @@ impl Screen {
     }
 
     /* Public */
+    pub fn maxlines(&self) -> u32 {
+        (self.scry - 2) as u32
+    }
+
     pub fn erase(&mut self) {
         erase();
         self.maxindex = 0;
@@ -61,13 +66,13 @@ impl Screen {
         if self.selected_index == index {
             attron(A_REVERSE());
         }
-        mvaddstr(index as i32, 0, msg);
+        mvaddnstr(index as i32, 0, msg, self.scrx as i32);
         attroff(A_REVERSE());
         self.maxindex = max(self.maxindex, index);
     }
 
     pub fn printstatus(&self, msg: &str) {
-        mvprintw((self.maxlines+1) as i32, 0, msg);
+        mvprintw((self.scry-1) as i32, 0, msg);
     }
 
     pub fn up(&mut self) {
@@ -77,7 +82,7 @@ impl Screen {
     }
 
     pub fn down(&mut self) {
-        if self.selected_index < min(self.maxlines, self.maxindex) {
+        if self.selected_index < min(self.maxlines(), self.maxindex) {
             self.selected_index += 1;
         }
     }
